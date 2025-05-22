@@ -48,30 +48,34 @@ function print_bench_name()
 pushd $OUT_DIR > /dev/null 2>&1
 for t in $libsodium_CASES
 do
-    if [ ! -e "${t}.wasm" ]; then
-        echo "${t}.wasm doesn't exist, please run build.sh first"
-        exit
+    if [ ! -e "${t}_opt.aot" ]; then
+        if [ ! -e "${t}.wasm" ]; then
+            echo "${t}.wasm doesn't exist, please run build.sh first"
+            exit
+        fi
+
+        echo ""
+        echo "Compile ${t}.wasm to ${t}.aot .."
+        ${WAMRC_CMD} -o ${t}.aot ${t}.wasm
+
+        echo ""
+        echo "Compile ${t}.wasm to ${t}_pgo.aot .."
+        ${WAMRC_CMD} --enable-llvm-pgo -o ${t}_pgo.aot ${t}.wasm
+
+        echo ""
+        echo "Run ${t}_pgo.aot to generate the raw profile data .."
+        ${IWASM_CMD} --gen-prof-file=${t}.profraw --dir=. ${t}_pgo.aot
+
+        echo ""
+        echo "Merge the raw profile data to ${t}.profdata .."
+        rm -f ${t}.profdata && /home/doellerer/ma/wasm-micro-runtime/tests/benchmarks/polybench/../../../core/deps/llvm/build/bin/llvm-profdata merge -output=${t}.profdata ${t}.profraw
+
+        echo ""
+        echo "Compile ${t}.wasm to ${t}_opt.aot with the profile data .."
+        ${WAMRC_CMD} --use-prof-file=${t}.profdata -o ${t}_opt.aot ${t}.wasm
+    else
+        echo "${t}_opt.aot already exists, skipping."
     fi
-
-    echo ""
-    echo "Compile ${t}.wasm to ${t}.aot .."
-    ${WAMRC_CMD} -o ${t}.aot ${t}.wasm
-
-    echo ""
-    echo "Compile ${t}.wasm to ${t}_pgo.aot .."
-    ${WAMRC_CMD} --enable-llvm-pgo -o ${t}_pgo.aot ${t}.wasm
-
-    echo ""
-    echo "Run ${t}_pgo.aot to generate the raw profile data .."
-    ${IWASM_CMD} --gen-prof-file=${t}.profraw --dir=. ${t}_pgo.aot
-
-    echo ""
-    echo "Merge the raw profile data to ${t}.profdata .."
-    rm -f ${t}.profdata && llvm-profdata merge -output=${t}.profdata ${t}.profraw
-
-    echo ""
-    echo "Compile ${t}.wasm to ${t}_opt.aot with the profile data .."
-    ${WAMRC_CMD} --use-prof-file=${t}.profdata -o ${t}_opt.aot ${t}.wasm
 done
 
 # run benchmarks
@@ -118,4 +122,3 @@ do
 
     echo -en "\n" >> $REPORT
 done
-

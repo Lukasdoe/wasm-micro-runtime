@@ -28,15 +28,15 @@ do
         fi
 
         echo "Build ${file_name%.*}_native"
-        gcc -O3 -I utilities -I ${file%/*} utilities/polybench.c ${file} \
-                -DPOLYBENCH_TIME -lm -o ${OUT_DIR}/${file_name%.*}_native
+        ~/.local/share/llvm-20/bin/clang -O3 -I utilities -I ${file%/*} utilities/polybench.c ${file} \
+                -lm -o ${OUT_DIR}/${file_name%.*}_native
 
         echo "Build ${file_name%.*}.wasm"
-        /opt/wasi-sdk/bin/clang -O3 -I utilities -I ${file%/*}      \
+        /home/doellerer/ma/wasi-sdk/bin/clang -O3 -I utilities -I ${file%/*}      \
                 utilities/polybench.c ${file}                       \
                 -Wl,--export=__heap_base -Wl,--export=__data_end    \
                 -Wl,--export=malloc -Wl,--export=free               \
-                -DPOLYBENCH_TIME -o ${OUT_DIR}/${file_name%.*}.wasm \
+                -o ${OUT_DIR}/${file_name%.*}.wasm \
                 -D_WASI_EMULATED_PROCESS_CLOCKS
 
         echo "Compile ${file_name%.*}.wasm into ${file_name%.*}.aot"

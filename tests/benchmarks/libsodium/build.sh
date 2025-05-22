@@ -31,24 +31,32 @@ fi
 cd libsodium
 
 echo "Build libsodium native"
-zig build -Doptimize=ReleaseFast -Denable_benchmarks=true
+~/.local/share/zig/zig build -Doptimize=ReleaseFast -Denable_benchmarks=true
 
 echo "Build libsodium wasm32-wasi"
-zig build -Doptimize=ReleaseFast -Denable_benchmarks=true -Dtarget=wasm32-wasi
+~/.local/share/zig/zig build -Doptimize=ReleaseFast -Denable_benchmarks=true -Dtarget=wasm32-wasi
 
 for case in ${libsodium_CASES}
 do
-    ${WAMRC_CMD} -o ${OUT_DIR}/${case}.aot ${OUT_DIR}/${case}.wasm
-    if [ "$?" != 0 ]; then
-        echo -e "Error while compiling ${case}.wasm to ${case}.aot"
-        exit
+    if [ ! -e "${OUT_DIR}/${case}.aot" ]; then
+        ${WAMRC_CMD} -o ${OUT_DIR}/${case}.aot ${OUT_DIR}/${case}.wasm
+        if [ "$?" != 0 ]; then
+            echo -e "Error while compiling ${case}.wasm to ${case}.aot"
+            exit
+        fi
+    else
+        echo "${case}.aot already exists, skipping."
     fi
 
     if [[ ${PLATFORM} == "linux" ]]; then
-        ${WAMRC_CMD} --enable-segue -o ${OUT_DIR}/${case}_segue.aot ${OUT_DIR}/${case}.wasm
-        if [ "$?" != 0 ]; then
-            echo -e "Error while compiling ${case}.wasm to ${case}_segue.aot"
-            exit
+        if [ ! -e "${OUT_DIR}/${case}_segue.aot" ]; then
+            ${WAMRC_CMD} --enable-segue -o ${OUT_DIR}/${case}_segue.aot ${OUT_DIR}/${case}.wasm
+            if [ "$?" != 0 ]; then
+                echo -e "Error while compiling ${case}.wasm to ${case}_segue.aot"
+                exit
+            fi
+        else
+            echo "${case}_segue.aot already exists, skipping."
         fi
     fi
 done

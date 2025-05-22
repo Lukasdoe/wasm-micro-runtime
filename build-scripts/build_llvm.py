@@ -119,7 +119,7 @@ def build_llvm(llvm_dir, platform, backends, projects, use_clang=False, extra_fl
 
     # enabling LLVM_INCLUDE_TOOLS will increase ~300M to the final package
     LLVM_INCLUDE_TOOLS_OPTION = [
-        "-DLLVM_INCLUDE_TOOLS:BOOL=ON" if projects else "-DLLVM_INCLUDE_TOOLS:BOOL=OFF"
+        "-DLLVM_INCLUDE_TOOLS:BOOL=ON"
     ]
 
     if not llvm_dir.exists():
@@ -183,7 +183,7 @@ def repackage_llvm(llvm_dir):
     # mv build/LLVM-*.gz .
     shutil.move(str(build_dir.joinpath(llvm_package).resolve()), str(llvm_dir))
     # rm -r build
-    shutil.rmtree(str(build_dir))
+    shutil.move(str(build_dir), str(llvm_dir.joinpath("./build_files").resolve()))
     # mkdir build
     build_dir.mkdir()
     # tar xf ./LLVM-*.tar.gz --strip-components=1 --directory=build

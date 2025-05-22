@@ -18,6 +18,3 @@ if [[ ${PLATFORM} == "linux" ]]; then
     echo "Run coremark with iwasm aot-segue mode .."
     ${IWASM} coremark_segue.aot
 fi
-
-echo "Run coremark with iwasm interpreter mode .."
-${IWASM} coremark.wasm
