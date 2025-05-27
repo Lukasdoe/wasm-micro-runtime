@@ -17,10 +17,15 @@ import csv
 from concurrent.futures import ProcessPoolExecutor, as_completed
 import dataclasses
 from typing import List, Union
+import time
+import statistics
+
+# Number of runs for timing (warmup + measured)
+NUM_RUNS = 5
+WARMUP_RUNS = 1
 
 # --- Configuration Constants ---
 BENCH_NAME_MAX_LEN = 20
-MAX_JOBS = 10
 
 POLYBENCH_CASES_STR = ("2mm 3mm adi atax bicg cholesky correlation covariance "
                        "deriche doitgen durbin fdtd-2d floyd-warshall gemm gemver "
@@ -61,7 +66,6 @@ class ScriptConfig:
     llvm_profdata_cmd: Path
     polybench_cases: List[str]
     bench_name_max_len: int = BENCH_NAME_MAX_LEN
-    max_jobs: int = MAX_JOBS
 
 def setup_config(args: argparse.Namespace) -> ScriptConfig:
     """Sets up paths and commands based on arguments and environment."""
@@ -174,55 +178,39 @@ def compile_and_profile_one(config: ScriptConfig, case_name: str):
 
 
 def run_hyperfine_for_case(config: ScriptConfig, case_name: str, partial_report_dir: Path) -> str:
-    """Runs hyperfine for a single benchmark case and writes results to a partial CSV report file."""
-    report_part_file = partial_report_dir / f"{case_name}.part" # Partial file, content is CSV
-
-    cmd_native = f"./{case_name}_native"
-    cmd_aot = f"{config.iwasm_cmd} {case_name}.aot"
-    cmd_aot_opt = f"{config.iwasm_cmd} {case_name}_opt.aot"
-
-    with tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".csv", dir=config.out_dir) as tmp_csv_file:
-        hyperfine_csv_path = Path(tmp_csv_file.name)
-
-    print(f"Benchmarking {case_name} with hyperfine (native, WAMR AOT, WAMR AOT+PGO) ..")
-    hyperfine_cmd = [
-        "hyperfine", "--ignore-failure", "--warmup", "1", "--runs", "2",
-        "--export-csv", str(hyperfine_csv_path),
-        cmd_native,
-        cmd_aot,
-        cmd_aot_opt
-    ]
-    run_command(hyperfine_cmd, cwd=config.out_dir, capture_output=True)
-
-    means = []
-    expected_means_count = 3
-    if hyperfine_csv_path.exists() and hyperfine_csv_path.stat().st_size > 0:
-        try:
-            with open(hyperfine_csv_path, 'r', newline='') as f_csv:
-                reader = csv.DictReader(f_csv)
-                for row in reader:
-                    means.append(row['mean'])
-            if len(means) != expected_means_count:
-                print(f"Warning: Expected {expected_means_count} mean values from hyperfine for {case_name}, got {len(means)}. Using ERROR placeholders.", file=sys.stderr)
-                means = ["ERROR_DATA_COUNT"] * expected_means_count
-        except Exception as e_csv:
-            print(f"Warning: Error reading hyperfine CSV for {case_name}: {e_csv}. Using ERROR placeholders.", file=sys.stderr)
-            means = ["ERROR_CSV_READ"] * expected_means_count
-        finally:
-            if hyperfine_csv_path.exists():
-                hyperfine_csv_path.unlink()
-    else:
-        print(f"Warning: Hyperfine CSV for {case_name} not found or empty. Using ERROR placeholders.", file=sys.stderr)
-        if hyperfine_csv_path.exists():
-            hyperfine_csv_path.unlink()
-        means = ["ERROR_HYPERFINE_CSV"] * expected_means_count
-
-    csv_row_data = [case_name] + means
-
-    with open(report_part_file, "w", newline='') as f_part_csv:
+    times = {}
+    commands = {
+        'native': [f"./{case_name}_native"],
+        'aot': [config.iwasm_cmd, f"{case_name}.aot"],
+        'aot_pgo': [config.iwasm_cmd, f"{case_name}_opt.aot"]
+    }
+    for key, cmd in commands.items():
+        # Warmup runs
+        for _ in range(WARMUP_RUNS):
+            run_command(cmd, cwd=config.out_dir)
+        # Measured runs
+        run_times = []
+        for _ in range(NUM_RUNS):
+            start = time.time()
+            run_command(cmd, cwd=config.out_dir)
+            run_times.append(time.time() - start)
+        times[key] = run_times
+    stats = {}
+    for key, run_times in times.items():
+        stats[key] = {
+            'min': min(run_times),
+            'max': max(run_times),
+            'median': statistics.median(run_times),
+            'stddev': statistics.stdev(run_times) if len(run_times) > 1 else 0.0
+        }
+    report_part_file = partial_report_dir / f"{case_name}.part"
+    with open(report_part_file, 'w', newline='') as f_part_csv:
         writer = csv.writer(f_part_csv)
-        writer.writerow(csv_row_data)
-
+        row = [case_name]
+        for key in ['native', 'aot', 'aot_pgo']:
+            s = stats[key]
+            row.extend([s['min'], s['max'], s['median'], s['stddev']])
+        writer.writerow(row)
     return case_name
 
 
@@ -240,7 +228,9 @@ def main():
     if config.report_file.exists():
         config.report_file.unlink()
 
-    csv_header = ["benchmark_name", "native_time", "aot_time", "aot_pgo_time"]
+    csv_header = ["benchmark_name", "native_min", "native_max", "native_median", "native_stddev",
+                  "aot_min", "aot_max", "aot_median", "aot_stddev",
+                  "aot_pgo_min", "aot_pgo_max", "aot_pgo_median", "aot_pgo_stddev"]
     with open(config.report_file, "w", newline='') as rf_csv:
         writer = csv.writer(rf_csv)
         writer.writerow(csv_header)
@@ -258,22 +248,17 @@ def main():
         partial_report_dir = Path(tmp_partial_dir_str)
         print(f"Partial reports will be stored in: {partial_report_dir}")
 
-        futures = {}
-        with ProcessPoolExecutor(max_workers=config.max_jobs) as executor:
-            for case_name in config.polybench_cases:
-                future = executor.submit(run_hyperfine_for_case, config, case_name, partial_report_dir)
-                futures[future] = case_name
-
-        for future in as_completed(futures):
-            case_name = futures[future]
+        for case_name in config.polybench_cases:
             try:
-                result = future.result()
+                result = run_hyperfine_for_case(config, case_name, partial_report_dir)
                 print(f"Finished benchmarking for: {result}")
             except Exception as e:
                 print(f"Error benchmarking {case_name}: {e}", file=sys.stderr)
                 error_part_file = partial_report_dir / f"{case_name}.part"
                 if not error_part_file.exists():
-                    error_csv_data = [case_name, "ERROR", "ERROR", "ERROR"]
+                    error_csv_data = [case_name, "ERROR", "ERROR", "ERROR", "ERROR",
+                                      "ERROR", "ERROR", "ERROR", "ERROR",
+                                      "ERROR", "ERROR", "ERROR", "ERROR"]
                     with open(error_part_file, "w", newline='') as f_err_csv:
                         writer = csv.writer(f_err_csv)
                         writer.writerow(error_csv_data)
@@ -288,20 +273,20 @@ def main():
                     with open(part_file, 'r', newline='') as f_part_csv:
                         reader = csv.reader(f_part_csv)
                         data_row = next(reader)
-                        if data_row and len(data_row) == 4 and data_row[0] == case_name_iter:
+                        if data_row and len(data_row) == 13 and data_row[0] == case_name_iter:
                             all_results_data.append(data_row)
                         else:
                             print(f"Warning: Malformed partial report for {case_name_iter}. Using NA.", file=sys.stderr)
-                            all_results_data.append([case_name_iter, "NA", "NA", "NA"])
+                            all_results_data.append([case_name_iter] + ["NA"] * 12)
                 except StopIteration:
                     print(f"Warning: Empty partial report for {case_name_iter}. Using NA.", file=sys.stderr)
-                    all_results_data.append([case_name_iter, "NA", "NA", "NA"])
+                    all_results_data.append([case_name_iter] + ["NA"] * 12)
                 except Exception as ex_read:
                     print(f"Warning: Could not read or parse partial report for {case_name_iter}: {ex_read}. Using NA.", file=sys.stderr)
-                    all_results_data.append([case_name_iter, "NA", "NA", "NA"])
+                    all_results_data.append([case_name_iter] + ["NA"] * 12)
             else:
                 print(f"Warning: Partial report for {case_name_iter} not found. Using NA values.", file=sys.stderr)
-                all_results_data.append([case_name_iter, "NA", "NA", "NA"])
+                all_results_data.append([case_name_iter] + ["NA"] * 12)
 
         all_results_data.sort(key=lambda x: x[0])
 
