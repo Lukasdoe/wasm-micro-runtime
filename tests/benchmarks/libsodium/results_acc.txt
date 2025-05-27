@@ -1,0 +1,83 @@
+Benchmark                      iwasm-aot/native     iwasm-aot-pgo/native PGO speedup
+-------------------------------------------------------------------------------------
+aead_aes256gcm2                              0.00               0.00           nanx
+aead_aes256gcm                               0.00               0.00           nanx
+aead_chacha20poly13052                       1.52               1.63          0.93x
+aead_chacha20poly1305                        2.67               2.61          1.02x
+aead_xchacha20poly1305                       2.34               2.28          1.03x
+auth2                                        1.95               1.88          1.04x
+auth3                                        1.77               1.96          0.90x
+auth5                                        1.63               1.63          1.00x
+auth6                                        2.20               2.20          1.00x
+auth7                                        1.67               1.72          0.97x
+auth                                         1.95               2.04          0.95x
+box2                                         2.73               2.75          0.99x
+box7                                         5.32               5.23          1.02x
+box8                                         5.45               5.39          1.01x
+box_easy2                                    5.54               4.87          1.14x
+box_easy                                     5.52               5.50          1.01x
+box_seal                                     4.98               4.88          1.02x
+box_seed                                     4.84               4.69          1.03x
+box                                          2.70               2.72          0.99x
+chacha20                                     1.73               1.81          0.96x
+codecs                                       0.69               0.66          1.04x
+core1                                        1.43               1.43          1.00x
+core2                                        1.43               1.43          1.00x
+core3                                        1.34               1.30          1.03x
+core4                                        1.33               1.11          1.20x
+core5                                        1.43               1.71          0.83x
+core6                                        1.22               1.22          1.00x
+core_ed25519                                 4.37               4.00          1.09x
+core_ristretto255                            4.54               4.30          1.06x
+ed25519_convert                              4.99               4.70          1.06x
+generichash2                                 2.06               2.05          1.00x
+generichash3                                 2.24               2.13          1.05x
+generichash                                  1.64               1.64          1.00x
+hash3                                        1.86               1.71          1.08x
+hash                                         1.84               1.73          1.06x
+kdf                                          2.66               2.70          0.98x
+keygen                                       0.37               0.35          1.06x
+kx                                           4.67               4.50          1.04x
+metamorphic                                  1.26               1.26          0.99x
+misuse                                        nan                nan           nanx
+onetimeauth2                                  nan                nan           nanx
+onetimeauth7                                 1.67               1.71          0.98x
+onetimeauth                                  2.43               2.61          0.93x
+pwhash_argon2id                              2.85               2.80          1.02x
+pwhash_argon2i                               2.77               2.75          1.01x
+pwhash_scrypt_ll                             2.22               2.23          1.00x
+pwhash_scrypt                                2.44               2.43          1.00x
+randombytes                                  1.44               1.16          1.24x
+scalarmult2                                  4.64               4.57          1.02x
+scalarmult5                                  5.46               5.46          1.00x
+scalarmult6                                  5.43               5.36          1.01x
+scalarmult7                                  5.38               5.41          0.99x
+scalarmult8                                  3.67               3.61          1.02x
+scalarmult_ed25519                           5.05               4.67          1.08x
+scalarmult_ristretto255                      4.90               4.59          1.07x
+scalarmult                                   4.14               4.19          0.99x
+secretbox2                                   1.81               1.83          0.99x
+secretbox7                                   1.56               1.57          0.99x
+secretbox8                                   2.13               2.10          1.01x
+secretbox_easy2                              5.49               5.13          1.07x
+secretbox_easy                               2.04               2.03          1.01x
+secretbox                                    2.08               1.87          1.12x
+secretstream_xchacha20poly1305               2.33               2.34          1.00x
+shorthash                                    0.61               0.67          0.91x
+sign                                         4.75               4.47          1.06x
+siphashx24                                   0.99               0.96          1.04x
+sodium_core                                  0.17               0.17          1.00x
+sodium_utils2                                 nan                nan           nanx
+sodium_utils                                 0.83               0.82          1.01x
+stream2                                      1.61               1.60          1.00x
+stream3                                      1.53               1.41          1.08x
+stream4                                      1.77               1.80          0.98x
+stream                                       1.85               1.82          1.02x
+verify1                                      0.67               0.67          1.00x
+xchacha20                                    3.36               3.33          1.01x
+
+PGO Speedup Statistics:
+Maximum: 1.24x
+Minimum: 0.83x
+Median:  1.01x
+Variance: 0.0034
