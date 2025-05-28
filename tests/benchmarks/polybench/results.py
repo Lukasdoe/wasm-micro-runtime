@@ -3,8 +3,6 @@ import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-# Directory containing partial report files
-PARTIAL_REPORTS_DIR = Path("results/partial_reports")
 # Directory to save plots
 PLOTS_DIR = Path("results/plots")
 PLOTS_DIR.mkdir(parents=True, exist_ok=True)
@@ -17,7 +15,7 @@ def load_data():
         return pd.DataFrame()
 
     try:
-        return pd.read_csv(report_file, names=["benchmark_name", "native_time", "aot_time", "aot_pgo_time"], header=0)
+        return pd.read_csv(report_file, names=["benchmark_name","native_min","native_max","native_median","native_stddev","aot_min","aot_max","aot_median","aot_stddev","aot_pgo_min","aot_pgo_max","aot_pgo_median","aot_pgo_stddev"], header=0)
     except Exception as e:
         print(f"Error reading report.csv: {e}")
         return pd.DataFrame()
@@ -26,28 +24,29 @@ def load_data():
 def create_individual_charts(df):
     for _, row in df.iterrows():
         benchmark = row["benchmark_name"]
-        times = row[["native_time", "aot_time", "aot_pgo_time"]].astype(float)
+        times = row[["native_median", "aot_median", "aot_pgo_median"]].astype(float)
 
         plt.figure(figsize=(8, 6))
         plt.bar(["Native", "AOT", "PGO AOT"], times, color=["blue", "orange", "green"])
         plt.title(f"Execution Times for {benchmark}")
         plt.ylabel("Time (s)")
+        print(f"Creating plot for {benchmark}...")
         plt.savefig(PLOTS_DIR / f"{benchmark}.svg", format="svg")
         plt.close()
 
 # Update the normalized bar chart to group columns into three distinct groups with three colors and legend entries
 def create_normalized_chart(df):
     normalized_df = df.copy()
-    normalized_df[["aot_time", "aot_pgo_time"]] = normalized_df[["aot_time", "aot_pgo_time"]].div(normalized_df["native_time"], axis=0)
-    normalized_df["native_time"] = 1.0  # Native execution is the baseline
+    normalized_df[["aot_median", "aot_pgo_median"]] = normalized_df[["aot_median", "aot_pgo_median"]].div(normalized_df["native_median"], axis=0)
+    normalized_df["native_median"] = 1.0  # Native execution is the baseline
 
     plt.figure(figsize=(12, 8))
 
     # Prepare data for grouped bar chart
     benchmarks = normalized_df["benchmark_name"]
-    native_times = normalized_df["native_time"]
-    aot_times = normalized_df["aot_time"]
-    pgo_aot_times = normalized_df["aot_pgo_time"]
+    native_times = normalized_df["native_median"]
+    aot_times = normalized_df["aot_median"]
+    pgo_aot_times = normalized_df["aot_pgo_median"]
 
     x = range(len(benchmarks))  # X-axis positions for benchmarks
 
