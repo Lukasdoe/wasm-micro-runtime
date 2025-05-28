@@ -66,6 +66,16 @@ def create_normalized_chart(df):
     plt.savefig(PLOTS_DIR / "normalized_execution_times.svg", format="svg")
     plt.close()
 
+def calc_statistics(df):
+    df_copy = df.copy()
+    df_copy["pgo_improv"] = df_copy["aot_pgo_median"] - df_copy["aot_median"]
+    print("PGO Improvement Statistics:")
+    print("Median Improvement:", df_copy["pgo_improv"].median())
+    print("Mean Improvement:", df_copy["pgo_improv"].mean())
+    print("Standard Deviation of Improvement:", df_copy["pgo_improv"].std())
+    print("Min Improvement:", df_copy["pgo_improv"].min())
+    print("Max Improvement:", df_copy["pgo_improv"].max())
+
 # Main function
 def main():
     df = load_data()
@@ -75,6 +85,7 @@ def main():
 
     create_individual_charts(df)
     create_normalized_chart(df)
+    calc_statistics(df)
 
 if __name__ == "__main__":
     main()

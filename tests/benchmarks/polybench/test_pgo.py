@@ -177,7 +177,7 @@ def compile_and_profile_one(config: ScriptConfig, case_name: str):
         print(f"\n{opt_aot_file.name} already exists, skipping.")
 
 
-def run_hyperfine_for_case(config: ScriptConfig, case_name: str, partial_report_dir: Path) -> str:
+def run_benchmark(config: ScriptConfig, case_name: str, partial_report_dir: Path) -> str:
     times = {}
     commands = {
         'native': [f"./{case_name}_native"],
@@ -250,7 +250,7 @@ def main():
 
         for case_name in config.polybench_cases:
             try:
-                result = run_hyperfine_for_case(config, case_name, partial_report_dir)
+                result = run_benchmark(config, case_name, partial_report_dir)
                 print(f"Finished benchmarking for: {result}")
             except Exception as e:
                 print(f"Error benchmarking {case_name}: {e}", file=sys.stderr)
