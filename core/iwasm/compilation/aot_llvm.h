@@ -266,6 +266,9 @@ typedef struct AOTFuncContext {
 #if WASM_ENABLE_DEBUG_AOT != 0
     LLVMMetadataRef debug_func;
 #endif
+#if WASM_ENABLE_BRANCH_HINTS != 0
+    struct WASMCompilationHint* function_hints;
+#endif
 
     unsigned int stack_consumption_for_func_call;
 
@@ -444,6 +447,9 @@ typedef struct AOTCompContext {
 
     /* Reference Types */
     bool enable_ref_types;
+
+    /* Branch Hinting */
+    bool enable_branch_hints;
 
     /* Disable LLVM built-in intrinsics */
     bool disable_llvm_intrinsics;
