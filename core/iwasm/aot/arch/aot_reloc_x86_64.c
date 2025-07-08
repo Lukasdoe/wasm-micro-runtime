@@ -6,13 +6,16 @@
 #include "aot_reloc.h"
 
 #if !defined(BH_PLATFORM_WINDOWS)
-#define R_X86_64_64 1       /* Direct 64 bit  */
-#define R_X86_64_PC32 2     /* PC relative 32 bit signed */
-#define R_X86_64_PLT32 4    /* 32 bit PLT address */
-#define R_X86_64_GOTPCREL 9 /* 32 bit signed PC relative offset to GOT */
-#define R_X86_64_32 10      /* Direct 32 bit zero extended */
-#define R_X86_64_32S 11     /* Direct 32 bit sign extended */
-#define R_X86_64_PC64 24    /* PC relative 64 bit */
+#define R_X86_64_64 1         /* Direct 64 bit  */
+#define R_X86_64_PC32 2       /* PC relative 32 bit signed */
+#define R_X86_64_PLT32 4      /* 32 bit PLT address */
+#define R_X86_64_GOTPCREL 9   /* 32 bit signed PC relative offset to GOT */
+#define R_X86_64_32 10        /* Direct 32 bit zero extended */
+#define R_X86_64_32S 11       /* Direct 32 bit sign extended */
+#define R_X86_64_PC64 24      /* PC relative 64 bit */
+#define R_X86_64_GOTPCRELX 41 /* 64 bit signed PC relative offset to GOT */
+#define R_X86_64_REX_GOTPCRELX \
+    42 /* 64 bit signed PC relative offset to GOT with REX prefix */
 #else
 #ifndef IMAGE_REL_AMD64_ADDR64
 #define IMAGE_REL_AMD64_ADDR64 1 /* The 64-bit VA of the relocation target */
@@ -151,9 +154,11 @@ apply_relocation(AOTModule *module, uint8 *target_section_addr,
 #endif
 #if !defined(BH_PLATFORM_WINDOWS)
         case R_X86_64_PC32:
+        case R_X86_64_GOTPCRELX:
+        case R_X86_64_REX_GOTPCRELX:
         case R_X86_64_GOTPCREL: /* GOT + G has been calculated as symbol_addr */
         {
-            intptr_t target_addr = (intptr_t) /* S + A - P */
+            intptr_t target_addr = (intptr_t)/* S + A - P */
                 ((uintptr_t)symbol_addr + reloc_addend
                  - (uintptr_t)(target_section_addr + reloc_offset));
 
@@ -172,7 +177,7 @@ apply_relocation(AOTModule *module, uint8 *target_section_addr,
         }
         case R_X86_64_PC64:
         {
-            intptr_t target_addr = (intptr_t) /* S + A - P */
+            intptr_t target_addr = (intptr_t)/* S + A - P */
                 ((uintptr_t)symbol_addr + reloc_addend
                  - (uintptr_t)(target_section_addr + reloc_offset));
 
@@ -222,12 +227,12 @@ apply_relocation(AOTModule *module, uint8 *target_section_addr,
                 plt = (uint8 *)module->code + module->code_size
                       - get_plt_table_size()
                       + get_plt_item_size() * symbol_index;
-                target_addr = (intptr_t) /* L + A - P */
+                target_addr = (intptr_t)/* L + A - P */
                     ((uintptr_t)plt + reloc_addend
                      - (uintptr_t)(target_section_addr + reloc_offset));
             }
             else {
-                target_addr = (intptr_t) /* S + A - P */
+                target_addr = (intptr_t)/* S + A - P */
                     ((uintptr_t)symbol_addr + reloc_addend
                      - (uintptr_t)(target_section_addr + reloc_offset));
             }
