@@ -353,9 +353,13 @@ endif()
 # set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -mindirect-branch=thunk -mfunction-return=thunk")
 
 if (NOT MSVC)
-  add_definitions(-D_FORTIFY_SOURCE=2)
   set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -ftrapv")
-endif()
+  if (NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+    # newer glibc versions warn about using FORTIFY_SOURCE without optimizations enabled:
+    # https://sourceware.org/git/?p=glibc.git;a=commit;f=include/features.h;h=05c2c9618f583ea4acd69b3fe5ae2a2922dd2ddc
+    add_definitions(-D_FORTIFY_SOURCE=2)
+  endif ()
+endif ()
 
 if (WIN32)
   add_definitions(-D_WINSOCK_DEPRECATED_NO_WARNINGS)

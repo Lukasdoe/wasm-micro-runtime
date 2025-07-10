@@ -2463,8 +2463,9 @@ destroy_object_data_sections(AOTObjectDataSection *data_sections,
             if (!strncmp(data_section->name, "__llvm_prf_data", 15)) {
                 LLVMProfileData *data = (LLVMProfileData *)data_section->data;
                 if (data->values) {
-                    uint32 num_value_sites =
-                        data->num_value_sites[0] + data->num_value_sites[1];
+                    uint32 num_value_sites = data->num_value_sites[0]
+                                             + data->num_value_sites[1]
+                                             + data->num_value_sites[2];
                     uint32 j;
                     for (j = 0; j < num_value_sites; j++) {
                         ValueProfNode *node = data->values[j], *node_next;
