@@ -438,6 +438,17 @@ typedef struct AOTFrame {
 } AOTFrame;
 
 #if WASM_ENABLE_STATIC_PGO != 0
+
+/* VALUE_PROF_KIND Definitions */
+/* indirect call target */
+#define IPVK_IndirectCallTarget 0
+/* memory intrinsic functions size */
+#define IPVK_MemOPSize 1
+/* vtable address point */
+#define IPVK_VTableAddress 2
+#define IPVK_First IPVK_IndirectCallTarget
+#define IPVK_Last IPVK_VTableAddress
+
 /* The bitmaps fields in LLVMProfileRawHeader, LLVMProfileData,
  * LLVMProfileData_64 all dummy fields, it's used in MC/DC code coverage
  * instead of PGO. See https://llvm.org/docs/InstrProfileFormat.html#bitmap */
@@ -455,6 +466,8 @@ typedef struct LLVMProfileRawHeader {
     uint64 counters_delta;
     uint64 bitmap_delta;
     uint64 names_delta;
+    uint64 num_prof_vtables;
+    uint64 v_names_size;
     uint64 value_kind_last;
 } LLVMProfileRawHeader;
 
@@ -475,7 +488,7 @@ typedef struct LLVMProfileData {
     uintptr_t func_ptr;
     ValueProfNode **values;
     uint32 num_counters;
-    uint16 num_value_sites[2];
+    uint16 num_value_sites[IPVK_Last + 1];
     uint32 num_bitmaps;
 } LLVMProfileData;
 
@@ -490,7 +503,7 @@ typedef struct LLVMProfileData_64 {
     uint64 func_ptr;
     uint64 values;
     uint32 num_counters;
-    uint16 num_value_sites[2];
+    uint16 num_value_sites[IPVK_Last + 1];
     uint32 num_bitmaps;
 } LLVMProfileData_64;
 #endif /* end of WASM_ENABLE_STATIC_PGO != 0 */

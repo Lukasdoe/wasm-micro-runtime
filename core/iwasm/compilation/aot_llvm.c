@@ -2637,7 +2637,7 @@ aot_create_comp_context(const AOTCompData *comp_data, aot_comp_option_t option)
     AOTCompContext *comp_ctx, *ret = NULL;
     LLVMTargetRef target;
     char *triple = NULL, *triple_norm, *arch, *abi;
-    char *cpu = NULL, *features, buf[128];
+    char *cpu = NULL, *features, buf[256];
     char *triple_norm_new = NULL, *cpu_new = NULL;
     char *err = NULL, *fp_round = "round.tonearest",
          *fp_exce = "fpexcept.strict";
@@ -3092,11 +3092,11 @@ aot_create_comp_context(const AOTCompData *comp_data, aot_comp_option_t option)
             if (!(triple_norm = triple_norm_new =
                       LLVMNormalizeTargetTriple(triple))) {
                 snprintf(buf, sizeof(buf),
-                         "llvm normlalize target triple (%s) failed.", triple);
+                         "llvm normalize target triple (%s) failed.", triple);
                 aot_set_last_error(buf);
                 goto fail;
             }
-            LOG_VERBOSE("triple: %s => normailized: %s", triple, triple_norm);
+            LOG_VERBOSE("triple: %s => normalized: %s", triple, triple_norm);
             if (!cpu)
                 cpu = "";
         }

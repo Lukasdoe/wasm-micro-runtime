@@ -4643,13 +4643,6 @@ aot_get_wasm_func_exec_time(const AOTModuleInstance *inst,
 
 #if WASM_ENABLE_STATIC_PGO != 0
 
-/* indirect call target */
-#define IPVK_IndirectCallTarget 0
-/* memory intrinsic functions size */
-#define IPVK_MemOPSize 1
-#define IPVK_First IPVK_IndirectCallTarget
-#define IPVK_Last IPVK_MemOPSize
-
 #define INSTR_PROF_DEFAULT_NUM_VAL_PER_SITE 24
 #define INSTR_PROF_MAX_NUM_VAL_PER_SITE 255
 
@@ -4894,10 +4887,11 @@ get_pgo_prof_data_size(AOTModuleInstance *module_inst, uint32 *p_num_prof_data,
             values = prof_data->values;
 
             if (prof_data->num_value_sites[0] > 0
-                || prof_data->num_value_sites[1] > 0) {
+                || prof_data->num_value_sites[1] > 0
+                || prof_data->num_value_sites[2] > 0) {
                 /* TotalSize (uint32) and NumValueKinds (uint32) */
                 total_size += 8;
-                for (j = 0; j < 2; j++) {
+                for (j = 0; j <= IPVK_Last; j++) {
                     if ((num_value_sites = prof_data->num_value_sites[j]) > 0) {
                         /* ValueKind (uint32) and NumValueSites (uint32) */
                         total_size += 8;
@@ -4995,8 +4989,8 @@ aot_dump_pgo_prof_data_to_buf(AOTModuleInstance *module_inst, char *buf,
     }
 
     prof_header.magic = 0xFF6C70726F667281LL;
-    /* Version 9 */
-    prof_header.version = 0x0000000000000009LL;
+    /* Version 10 */
+    prof_header.version = 0x000000000000000aLL;
     /* with VARIANT_MASK_IR_PROF (IR Instrumentation) */
     prof_header.version |= 0x1ULL << 56;
     /* with VARIANT_MASK_MEMPROF (Memory Profile) */
@@ -5004,10 +4998,13 @@ aot_dump_pgo_prof_data_to_buf(AOTModuleInstance *module_inst, char *buf,
     prof_header.num_prof_data = num_prof_data;
     prof_header.num_prof_counters = num_prof_counters;
     prof_header.names_size = prof_names_size;
-    prof_header.value_kind_last = 1;
+    prof_header.value_kind_last = IPVK_Last;
     /* __llvm_prf_bits won't be used in PGO, set dummy value here */
     prof_header.num_prof_bitmaps = 0;
     prof_header.bitmap_delta = 0;
+    prof_header.names_delta = 0;
+    prof_header.num_prof_vtables = 0;
+    prof_header.v_names_size = 0;
 
     if (!is_little_endian()) {
         aot_exchange_uint64((uint8 *)&prof_header.magic);
@@ -5018,6 +5015,9 @@ aot_dump_pgo_prof_data_to_buf(AOTModuleInstance *module_inst, char *buf,
         aot_exchange_uint64((uint8 *)&prof_header.names_size);
         aot_exchange_uint64((uint8 *)&prof_header.counters_delta);
         aot_exchange_uint64((uint8 *)&prof_header.bitmap_delta);
+        aot_exchange_uint64((uint8 *)&prof_header.names_delta);
+        aot_exchange_uint64((uint8 *)&prof_header.num_prof_vtables);
+        aot_exchange_uint64((uint8 *)&prof_header.v_names_size);
         aot_exchange_uint64((uint8 *)&prof_header.value_kind_last);
     }
 
@@ -5043,6 +5043,7 @@ aot_dump_pgo_prof_data_to_buf(AOTModuleInstance *module_inst, char *buf,
             prof_data_64->num_bitmaps = 0;
             prof_data_64->num_value_sites[0] = prof_data->num_value_sites[0];
             prof_data_64->num_value_sites[1] = prof_data->num_value_sites[1];
+            prof_data_64->num_value_sites[2] = prof_data->num_value_sites[2];
 
             if (!is_little_endian()) {
                 aot_exchange_uint64((uint8 *)&prof_data_64->func_hash);
@@ -5054,6 +5055,7 @@ aot_dump_pgo_prof_data_to_buf(AOTModuleInstance *module_inst, char *buf,
                 aot_exchange_uint32((uint8 *)&prof_data_64->num_bitmaps);
                 aot_exchange_uint16((uint8 *)&prof_data_64->num_value_sites[0]);
                 aot_exchange_uint16((uint8 *)&prof_data_64->num_value_sites[1]);
+                aot_exchange_uint16((uint8 *)&prof_data_64->num_value_sites[2]);
             }
             buf += sizeof(LLVMProfileData_64);
         }
@@ -5088,19 +5090,19 @@ aot_dump_pgo_prof_data_to_buf(AOTModuleInstance *module_inst, char *buf,
             values = values_tmp = prof_data->values;
 
             if (prof_data->num_value_sites[0] > 0
-                || prof_data->num_value_sites[1] > 0) {
+                || prof_data->num_value_sites[1] > 0
+                || prof_data->num_value_sites[2] > 0) {
                 uint32 *buf_total_size = (uint32 *)buf;
 
                 buf += 4; /* emit TotalSize later */
-                *(uint32 *)buf = (prof_data->num_value_sites[0] > 0
-                                  && prof_data->num_value_sites[1] > 0)
-                                     ? 2
-                                     : 1;
+                *(uint32 *)buf = (prof_data->num_value_sites[0] > 0)
+                                 + (prof_data->num_value_sites[1] > 0)
+                                 + (prof_data->num_value_sites[2] > 0);
                 if (!is_little_endian())
                     aot_exchange_uint32((uint8 *)buf);
                 buf += 4;
 
-                for (j = 0; j < 2; j++) {
+                for (j = 0; j < IPVK_Last; j++) {
                     if ((num_value_sites = prof_data->num_value_sites[j]) > 0) {
                         /* ValueKind */
                         *(uint32 *)buf = j;
