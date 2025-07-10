@@ -128,7 +128,7 @@ def build_llvm(llvm_dir, platform, backends, projects, use_clang=False, extra_fl
 
     # enabling LLVM_INCLUDE_TOOLS will increase ~300M to the final package
     LLVM_INCLUDE_TOOLS_OPTION = [
-        "-DLLVM_INCLUDE_TOOLS:BOOL=ON" if projects else "-DLLVM_INCLUDE_TOOLS:BOOL=OFF"
+        "-DLLVM_INCLUDE_TOOLS:BOOL=ON"
     ]
 
     if not llvm_dir.exists():
