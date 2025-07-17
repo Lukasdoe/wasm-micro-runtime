@@ -416,6 +416,7 @@ aot_create_funcs(const WASMModule *module, uint32 pointer_size)
         aot_func->local_types_wp = func->local_types;
         aot_func->code = func->code;
         aot_func->code_size = func->code_size;
+        aot_func->func_idx = i;
 #if WASM_ENABLE_BRANCH_HINTS != 0
         aot_func->code_body_begin = func->code_body_begin;
 #endif

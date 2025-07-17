@@ -2770,6 +2770,9 @@ aot_create_comp_context(const AOTCompData *comp_data, aot_comp_option_t option)
     if (option->enable_llvm_pgo)
         comp_ctx->enable_llvm_pgo = true;
 
+    if (option->enable_custom_pgo)
+        comp_ctx->enable_custom_pgo = true;
+
     if (option->use_prof_file)
         comp_ctx->use_prof_file = option->use_prof_file;
 
@@ -3992,8 +3995,12 @@ __call_llvm_intrinsic(const AOTCompContext *comp_ctx,
 #endif
 
     /* Call the LLVM intrinsic function */
+    const char *call_var_name = "";
+    if (ret_type != VOID_TYPE) {
+        call_var_name = "call";
+    }
     if (!(ret = LLVMBuildCall2(comp_ctx->builder, func_type, func, param_values,
-                               (uint32)param_count, "call"))) {
+                               (uint32)param_count, call_var_name))) {
         aot_set_last_error("llvm build intrinsic call failed.");
         return NULL;
     }
