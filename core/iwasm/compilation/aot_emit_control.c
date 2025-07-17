@@ -1185,7 +1185,6 @@ aot_compile_conditional_br(AOTCompContext *comp_ctx, AOTFuncContext *func_ctx,
             BUILD_COND_BR(value_cmp, block_dst->llvm_entry_block,
                           llvm_else_block);
 #endif
-
             /* Move builder to else block */
             SET_BUILDER_POS(llvm_else_block);
         }
@@ -1236,8 +1235,64 @@ aot_compile_conditional_br(AOTCompContext *comp_ctx, AOTFuncContext *func_ctx,
             BUILD_COND_BR(value_cmp, block_dst->llvm_end_block,
                           llvm_else_block);
 #endif
-            /* Move builder to else block */
-            SET_BUILDER_POS(llvm_else_block);
+            if (comp_ctx->enable_custom_pgo) {
+                LLVMPositionBuilderBefore(
+                    comp_ctx->builder,
+                    LLVMGetFirstInstruction(block_dst->llvm_entry_block));
+
+                char str[128];
+                snprintf(str, sizeof(str), "%d_%d",
+                         func_ctx->aot_func->func_idx
+                             + comp_ctx->comp_data->import_func_count,
+                         instr_offset);
+
+                size_t str_len = strlen(str);
+                LLVMValueRef *char_consts =
+                    wasm_runtime_malloc(sizeof(LLVMValueRef) * str_len);
+                if (!char_consts) {
+                    aot_set_last_error("allocate memory failed.");
+                    goto fail;
+                }
+                for (size_t i = 0; i < str_len; ++i) {
+                    char_consts[i] = LLVMConstInt(INT8_TYPE, str[i], false);
+                }
+
+                LLVMValueRef string_const =
+                    LLVMConstArray(INT8_TYPE, char_consts, str_len);
+                wasm_runtime_free(char_consts);
+
+                LLVMValueRef glob = LLVMAddGlobal(
+                    comp_ctx->module, LLVMTypeOf(string_const), "my_glob");
+                LLVMSetLinkage(glob, LLVMPrivateLinkage);
+                LLVMSetInitializer(glob, string_const);
+                LLVMSetGlobalConstant(glob, true);
+
+                LLVMTypeRef param_types[4];
+                param_types[0] = INT64_PTR_TYPE;
+                param_types[1] = I64_TYPE;
+                param_types[2] = I32_TYPE;
+                param_types[3] = I32_TYPE;
+                aot_call_llvm_intrinsic(comp_ctx, func_ctx,
+                                        "llvm.instrprof.increment", VOID_TYPE,
+                                        param_types, 4, glob,
+                                        I64_CONST(func_ctx->aot_func->func_idx),
+                                        I32_CONST(2), I32_CONST(0));
+
+                //
+
+                /* Move builder to else block */
+                SET_BUILDER_POS(llvm_else_block);
+
+                aot_call_llvm_intrinsic(comp_ctx, func_ctx,
+                                        "llvm.instrprof.increment", VOID_TYPE,
+                                        param_types, 4, glob,
+                                        I64_CONST(func_ctx->aot_func->func_idx),
+                                        I32_CONST(2), I32_CONST(1));
+            }
+            else {
+                /* Move builder to else block */
+                SET_BUILDER_POS(llvm_else_block);
+            }
         }
     }
     else {
