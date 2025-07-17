@@ -471,6 +471,9 @@ typedef struct AOTCompContext {
     /* Enable LLVM PGO (Profile-Guided Optimization) */
     bool enable_llvm_pgo;
 
+    /* Enable custom PGO (Profile-Guided Optimization) */
+    bool enable_custom_pgo;
+
     /* Enable extended constant expression */
     bool enable_extended_const;
 
