@@ -452,9 +452,6 @@ typedef struct AOTCompContext {
     /* Reference Types */
     bool enable_ref_types;
 
-    /* Branch Hinting */
-    bool enable_branch_hints;
-
     /* Disable LLVM built-in intrinsics */
     bool disable_llvm_intrinsics;
 
@@ -466,6 +463,9 @@ typedef struct AOTCompContext {
 
     /* Enable LLVM PGO (Profile-Guided Optimization) */
     bool enable_llvm_pgo;
+
+    /* Enable custom PGO (Profile-Guided Optimization) */
+    bool enable_custom_pgo;
 
     /* Enable extended constant expression */
     bool enable_extended_const;

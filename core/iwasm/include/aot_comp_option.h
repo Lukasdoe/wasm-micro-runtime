@@ -66,7 +66,6 @@ typedef struct AOTCompOption {
     bool enable_tail_call;
     bool enable_simd;
     bool enable_ref_types;
-    bool enable_branch_hints;
     bool enable_gc;
     bool enable_aux_stack_check;
     bool enable_extended_const;
@@ -78,6 +77,7 @@ typedef struct AOTCompOption {
     bool disable_llvm_jump_tables;
     bool disable_llvm_lto;
     bool enable_llvm_pgo;
+    bool enable_custom_pgo;
     bool enable_stack_estimation;
     bool quick_invoke_c_api_import;
     bool enable_shared_heap;

@@ -35,7 +35,6 @@ extern "C" {
  * and not at the beginning of each function call */
 #define WASM_FEATURE_FRAME_PER_FUNCTION (1 << 12)
 #define WASM_FEATURE_FRAME_NO_FUNC_IDX (1 << 13)
-#define WASM_FEATURE_BRANCH_HINTS (1 << 14)
 
 typedef enum AOTSectionType {
     AOT_SECTION_TYPE_TARGET_INFO = 0,
@@ -58,7 +57,6 @@ typedef enum AOTCustomSectionType {
     AOT_CUSTOM_SECTION_ACCESS_CONTROL = 2,
     AOT_CUSTOM_SECTION_NAME = 3,
     AOT_CUSTOM_SECTION_STRING_LITERAL = 4,
-    AOT_CUSTOM_SECTION_CODE_METADATA = 5,
 } AOTCustomSectionType;
 
 typedef struct AOTObjectDataSection {

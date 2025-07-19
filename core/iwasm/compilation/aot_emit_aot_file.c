@@ -3328,7 +3328,8 @@ is_data_section(AOTObjectData *obj_data, LLVMSectionIteratorRef sec_itr,
                 && get_relocations_count(sec_itr, &relocation_count)
                 && relocation_count > 0)
             || !strcmp(section_name, aot_stack_sizes_section_name)
-            || (obj_data->comp_ctx->enable_llvm_pgo
+            || ((obj_data->comp_ctx->enable_llvm_pgo
+                 || obj_data->comp_ctx->enable_custom_pgo)
                 && (!strncmp(section_name, "__llvm_prf_cnts", 15)
                     || !strncmp(section_name, "__llvm_prf_data", 15)
                     || !strncmp(section_name, "__llvm_prf_names", 16))));
@@ -3393,7 +3394,8 @@ aot_resolve_object_data_sections(AOTObjectData *obj_data)
             if ((name = (char *)LLVMGetSectionName(sec_itr))
                 && (is_data_section(obj_data, sec_itr, name))) {
                 data_section->name = name;
-                if (obj_data->comp_ctx->enable_llvm_pgo
+                if ((obj_data->comp_ctx->enable_llvm_pgo
+                     || obj_data->comp_ctx->enable_custom_pgo)
                     && !strcmp(name, "__llvm_prf_cnts")) {
                     snprintf(buf, sizeof(buf), "%s%u", name,
                              llvm_prf_cnts_idx++);
@@ -3406,7 +3408,8 @@ aot_resolve_object_data_sections(AOTObjectData *obj_data)
                     bh_memcpy_s(data_section->name, size, buf, size);
                     data_section->is_name_allocated = true;
                 }
-                else if (obj_data->comp_ctx->enable_llvm_pgo
+                else if ((obj_data->comp_ctx->enable_llvm_pgo
+                          || obj_data->comp_ctx->enable_custom_pgo)
                          && !strcmp(name, "__llvm_prf_data")) {
                     snprintf(buf, sizeof(buf), "%s%u", name,
                              llvm_prf_data_idx++);
@@ -3419,7 +3422,8 @@ aot_resolve_object_data_sections(AOTObjectData *obj_data)
                     bh_memcpy_s(data_section->name, size, buf, size);
                     data_section->is_name_allocated = true;
                 }
-                else if (obj_data->comp_ctx->enable_llvm_pgo
+                else if ((obj_data->comp_ctx->enable_llvm_pgo
+                          || obj_data->comp_ctx->enable_custom_pgo)
                          && !strcmp(name, "__llvm_prf_bits")) {
                     LOG_WARNING("__llvm_prf_bits section is not supported and "
                                 "shouldn't be used in PGO.");
@@ -3431,6 +3435,12 @@ aot_resolve_object_data_sections(AOTObjectData *obj_data)
                     data_section->data = (uint8 *)aot_compress_aot_func_names(
                         obj_data->comp_ctx, &data_section->size);
                     data_section->is_data_allocated = true;
+                }
+                else if (obj_data->comp_ctx->enable_custom_pgo
+                         && !strcmp(name, "__llvm_prf_names")) {
+                    data_section->data =
+                        (uint8 *)LLVMGetSectionContents(sec_itr);
+                    data_section->size = (uint32)LLVMGetSectionSize(sec_itr);
                 }
                 else {
                     data_section->data =
@@ -3990,7 +4000,8 @@ aot_resolve_object_relocation_group(AOTObjectData *obj_data,
             relocation->symbol_name = (char *)aot_stack_sizes_section_name;
         }
 
-        if (obj_data->comp_ctx->enable_llvm_pgo
+        if ((obj_data->comp_ctx->enable_llvm_pgo
+             || obj_data->comp_ctx->enable_custom_pgo)
             && (!strcmp(relocation->symbol_name, "__llvm_prf_cnts")
                 || !strcmp(relocation->symbol_name, "__llvm_prf_data"))) {
             LLVMSectionIteratorRef sec_itr;
@@ -4124,7 +4135,8 @@ is_relocation_section_name(AOTObjectData *obj_data, char *section_name)
             || !strcmp(section_name, ".rel.sdata")
             || !strcmp(section_name, ".rela.rodata")
             || !strcmp(section_name, ".rel.rodata")
-            || (obj_data->comp_ctx->enable_llvm_pgo
+            || ((obj_data->comp_ctx->enable_llvm_pgo
+                 || obj_data->comp_ctx->enable_custom_pgo)
                 && (!strcmp(section_name, ".rela__llvm_prf_data")
                     || !strcmp(section_name, ".rel__llvm_prf_data")))
             /* ".rela.rodata.cst4/8/16/.." */
@@ -4217,7 +4229,8 @@ aot_resolve_object_relocation_groups(AOTObjectData *obj_data)
             name = (char *)LLVMGetSectionName(sec_itr);
             relocation_group->section_name = name;
 
-            if (obj_data->comp_ctx->enable_llvm_pgo
+            if ((obj_data->comp_ctx->enable_llvm_pgo
+                 || obj_data->comp_ctx->enable_custom_pgo)
                 && (!strcmp(name, ".rela__llvm_prf_data")
                     || !strcmp(name, ".rel__llvm_prf_data"))) {
                 char buf[32];
@@ -4240,7 +4253,8 @@ aot_resolve_object_relocation_groups(AOTObjectData *obj_data)
                 return false;
             }
 
-            if (obj_data->comp_ctx->enable_llvm_pgo
+            if ((obj_data->comp_ctx->enable_llvm_pgo
+                 || obj_data->comp_ctx->enable_custom_pgo)
                 && (!strcmp(name, ".rela__llvm_prf_data")
                     || !strcmp(name, ".rel__llvm_prf_data"))) {
                 llvm_prf_data_idx++;
@@ -4500,9 +4514,6 @@ aot_obj_data_create(AOTCompContext *comp_ctx)
     }
     if (comp_ctx->enable_ref_types) {
         obj_data->target_info.feature_flags |= WASM_FEATURE_REF_TYPES;
-    }
-    if (comp_ctx->enable_branch_hints) {
-        obj_data->target_info.feature_flags |= WASM_FEATURE_BRANCH_HINTS;
     }
     if (comp_ctx->enable_gc) {
         obj_data->target_info.feature_flags |= WASM_FEATURE_GARBAGE_COLLECTION;
