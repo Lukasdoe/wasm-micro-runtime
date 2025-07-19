@@ -165,11 +165,11 @@ endif()
 
 # Enable LLVM
 if (NOT WAMR_BUILD_WITH_CUSTOM_LLVM)
-  set(LLVM_ROOT "/home/lukas2/ma/llvm-project/install-x64-relwithdebinfo")
+  set (LLVM_ROOT "${PROJECT_SOURCE_DIR}/../core/deps/llvm")
   if (NOT EXISTS "${LLVM_ROOT}")
-    message(FATAL_ERROR "Cannot find LLVM dir: ${LLVM_ROOT}")
+    message (FATAL_ERROR "Cannot find LLVM dir: ${LLVM_ROOT}")
   endif ()
-  set(CMAKE_PREFIX_PATH "${LLVM_ROOT};${CMAKE_PREFIX_PATH}")
+  set (CMAKE_PREFIX_PATH "${LLVM_ROOT};${CMAKE_PREFIX_PATH}")
 endif ()
 
 find_package(LLVM REQUIRED CONFIG)
