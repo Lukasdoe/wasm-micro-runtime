@@ -768,7 +768,7 @@ struct WASMTag {
 #if WASM_ENABLE_BRANCH_HINTS != 0
 enum WASMCompilationHintType {
     DUMMY = 0,
-    WASM_COMPILATION_BRANCH_HINT = 0,
+    WASM_COMPILATION_BRANCH_HINT = 1,
 };
 struct WASMCompilationHint {
     struct WASMCompilationHint *next;
@@ -779,6 +779,7 @@ struct WASMCompilationHintBranchHint {
     enum WASMCompilationHintType type;
     uint32 offset;
     bool is_likely;
+    bool used;
 };
 #endif
 
