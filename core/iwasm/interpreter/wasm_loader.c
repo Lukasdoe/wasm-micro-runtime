@@ -7501,7 +7501,19 @@ wasm_loader_unload(WASMModule *module)
 #endif
 #endif
 #if WASM_ENABLE_BRANCH_HINTS != 0
-    for (i = 0; i < module->function_count; i++) {
+    for (size_t i = 0; i < module->function_count; i++) {
+        if (module->function_hints) {
+            struct WASMCompilationHint* hints = module->function_hints[i];
+            while (hints != NULL && hints->type == WASM_COMPILATION_BRANCH_HINT) {
+                struct WASMCompilationHintBranchHint* h = (struct WASMCompilationHintBranchHint*)hints;
+                if (!h->used) {
+                    printf("Unused branch hint for function %lu, offset: %x\n",
+                           i + module->import_count, h->offset);
+                }
+                hints = hints->next;
+            }
+        }
+
         // be carefull when adding more hints. This only works as long as
         // the hint structs have been allocated all at once as an array.
         // With only branch-hints at the moment, this is the case.
