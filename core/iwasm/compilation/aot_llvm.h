@@ -667,6 +667,9 @@ unsigned int
 aot_estimate_stack_usage_for_function_call(const AOTCompContext *comp_ctx,
                                            const AOTFuncType *callee_func_type);
 
+uint64_t
+aot_func_name_hash(const char *name);
+
 #ifdef __cplusplus
 } /* end of extern "C" */
 #endif

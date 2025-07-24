@@ -5608,6 +5608,7 @@ read_code_metadata_section(const uint8 *buf, const uint8 *buf_end,
         for (uint32 j = 0; j < num_hints; ++j) {
             struct WASMCompilationHint *new_hint = &new_hints[j];
             new_hint->next = NULL;
+            new_hint->used = false;
             read_leb_uint32(buf, buf_end, new_hint->offset);
 
             uint32 size;
@@ -5644,6 +5645,7 @@ handle_compilation_hint_branch_hint_processor(const uint8 *buf,
 {
     (void)module;
     struct WASMCompilationHintBranchHint *hint = hint_store;
+    hint->type = WASM_COMPILATION_HINT_BRANCH;
     if (hint_size != 1) {
         set_error_buf_v(error_buf, error_buf_size,
                         "invalid branch hint size, expected 1, got %d.",
@@ -5686,6 +5688,7 @@ handle_compilation_hint_call_targets_processor(
     WASMModule *module)
 {
     struct WASMCompilationHintCallTargets *hint = hint_store;
+    hint->type = WASM_COMPILATION_HINT_CALL_TARGETS;
     CHECK_BUF(buf, buf_end, hint_size);
     hint->target_count = 0;
 
@@ -5799,12 +5802,14 @@ load_user_section(const uint8 *buf, const uint8 *buf_end, WASMModule *module,
             return false;
         }
         LOG_VERBOSE("Load branch hint section success.");
+        return true;
     }
 #else
     if (name_len == 25
         && memcmp((const char *)p, "metadata.code.branch_hint", 25) == 0) {
         LOG_VERBOSE("Found branch hint section, but branch hints are disabled "
                     "in this build, skipping.");
+        return true;
     }
 #endif
 
@@ -5817,12 +5822,14 @@ load_user_section(const uint8 *buf, const uint8 *buf_end, WASMModule *module,
             return false;
         }
         LOG_VERBOSE("Load call target compilation hint section success.");
+        return true;
     }
 #else
     if (name_len == 26
         && memcmp((const char *)p, "metadata.code.call_targets", 26) == 0) {
         LOG_VERBOSE("Found compilation hints call targets section, but "
                     "compilation hints are disabled in this build, skipping.");
+        return true;
     }
 #endif
 
@@ -7625,6 +7632,10 @@ wasm_loader_unload(WASMModule *module)
             struct WASMCompilationHint *curr = module->function_hints[i];
             struct WASMCompilationHint *last_chain_start = curr;
             while (curr != NULL) {
+                if (!curr->used) {
+                    printf("Unused hint for function %lu, offset: %x\n",
+                           i + module->import_count, curr->offset);
+                }
                 if (curr->type != last_chain_start->type) {
                     // we switched chains -> deallocate previous chain and reset
                     wasm_runtime_free(last_chain_start);

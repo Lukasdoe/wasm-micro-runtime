@@ -775,11 +775,13 @@ struct WASMCompilationHint {
     struct WASMCompilationHint *next;
     enum WASMCompilationHintType type;
     uint32 offset;
+    bool used;
 };
 struct WASMCompilationHintBranchHint {
     struct WASMCompilationHint *next;
     enum WASMCompilationHintType type;
     uint32 offset;
+    bool used;
 
     // custom field
     bool is_likely;
@@ -792,6 +794,7 @@ struct WASMCompilationHintCallTargets {
     struct WASMCompilationHint *next;
     enum WASMCompilationHintType type;
     uint32 offset;
+    bool used;
 
     // custom fields
     size_t target_count;
