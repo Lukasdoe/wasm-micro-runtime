@@ -5699,7 +5699,7 @@ load_user_section(const uint8 *buf, const uint8 *buf_end, WASMModule *module,
 
 #if WASM_ENABLE_BRANCH_HINTS != 0
     if (name_len == 25
-        && strncmp((const char *)p, "metadata.code.branch_hint", 25) == 0) {
+        && memcmp((const char *)p, "metadata.code.branch_hint", 25) == 0) {
         p += name_len;
         if (!handle_branch_hint_section(p, p_end, module, error_buf,
                                         error_buf_size)) {
@@ -5709,7 +5709,7 @@ load_user_section(const uint8 *buf, const uint8 *buf_end, WASMModule *module,
     }
 #else
     if (name_len == 25
-        && strncmp((const char *)p, "metadata.code.branch_hint", 25) == 0) {
+        && memcmp((const char *)p, "metadata.code.branch_hint", 25) == 0) {
         LOG_VERBOSE("Found branch hint section, but branch hints are disabled "
                     "in this build, skipping.");
     }
