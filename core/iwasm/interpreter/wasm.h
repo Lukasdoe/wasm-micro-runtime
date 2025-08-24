@@ -768,17 +768,34 @@ struct WASMTag {
 #if WASM_ENABLE_BRANCH_HINTS != 0
 enum WASMCompilationHintType {
     DUMMY = 0,
-    WASM_COMPILATION_BRANCH_HINT = 0,
+    WASM_COMPILATION_HINT_BRANCH = 1,
+    WASM_COMPILATION_HINT_CALL_TARGETS = 2,
 };
 struct WASMCompilationHint {
     struct WASMCompilationHint *next;
     enum WASMCompilationHintType type;
+    uint32 offset;
 };
 struct WASMCompilationHintBranchHint {
     struct WASMCompilationHint *next;
     enum WASMCompilationHintType type;
     uint32 offset;
+
+    // custom field
     bool is_likely;
+};
+struct WASMCompilationHintCallTargetsHint {
+    uint32 func_idx;
+    uint32 call_frequency;
+};
+struct WASMCompilationHintCallTargets {
+    struct WASMCompilationHint *next;
+    enum WASMCompilationHintType type;
+    uint32 offset;
+
+    // custom fields
+    size_t target_count;
+    struct WASMCompilationHintCallTargetsHint *hints;
 };
 #endif
 

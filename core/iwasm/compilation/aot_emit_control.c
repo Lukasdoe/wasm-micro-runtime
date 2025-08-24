@@ -272,7 +272,7 @@ aot_emit_branch_hint(AOTCompContext *comp_ctx, AOTFuncContext *func_ctx,
 {
     struct WASMCompilationHint *hint = func_ctx->function_hints;
     while (hint != NULL) {
-        if (hint->type == WASM_COMPILATION_BRANCH_HINT
+        if (hint->type == WASM_COMPILATION_HINT_BRANCH
             && ((struct WASMCompilationHintBranchHint *)hint)->offset
                    == offset) {
             break;
