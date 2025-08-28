@@ -270,7 +270,7 @@ typedef struct AOTFuncContext {
 #if WASM_ENABLE_DEBUG_AOT != 0
     LLVMMetadataRef debug_func;
 #endif
-#if WASM_ENABLE_BRANCH_HINTS != 0
+#if WASM_ENABLE_BRANCH_HINTS != 0 || WASM_ENABLE_COMPILATION_HINTS != 0
     struct WASMCompilationHint *function_hints;
 #endif
 

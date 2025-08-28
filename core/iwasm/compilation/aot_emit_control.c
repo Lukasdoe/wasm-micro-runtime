@@ -1094,11 +1094,11 @@ aot_compile_conditional_br(AOTCompContext *comp_ctx, AOTFuncContext *func_ctx,
     uint64 size;
 
     // ip is advanced by one byte for the opcode
-#if WASM_ENABLE_BRANCH_HINTS != 0
-    uint32 instr_offset =
+#if WASM_ENABLE_BRANCH_HINTS != 0 || WASM_ENABLE_COMPILATION_HINTS != 0
+    const uint32 instr_offset =
         (*p_frame_ip - 0x1) - (func_ctx->aot_func->code_body_begin);
 #else
-    uint32 instr_offset = 0;
+    const uint32 instr_offset = 0;
 #endif
     uint64 br_depth;
     if (!read_leb(p_frame_ip, *p_frame_ip + 5, 32, false, &br_depth, NULL, 0))

@@ -3908,7 +3908,7 @@ load_function_section(const uint8 *buf, const uint8 *buf_end,
 
             /* Resolve local set count */
             p_code_end = p_code + code_size;
-#if WASM_ENABLE_BRANCH_HINTS != 0
+#if WASM_ENABLE_BRANCH_HINTS != 0 || WASM_ENABLE_COMPILATION_HINTS != 0
             uint8 *p_body_start = (uint8 *)p_code;
 #endif
             local_count = 0;
@@ -3991,7 +3991,7 @@ load_function_section(const uint8 *buf, const uint8 *buf_end,
             if (local_count > 0)
                 func->local_types = (uint8 *)func + sizeof(WASMFunction);
             func->code_size = code_size;
-#if WASM_ENABLE_BRANCH_HINTS != 0
+#if WASM_ENABLE_BRANCH_HINTS != 0 || WASM_ENABLE_COMPILATION_HINTS != 0
             func->code_body_begin = p_body_start;
 #endif
             /*
@@ -7613,13 +7613,31 @@ wasm_loader_unload(WASMModule *module)
     }
 #endif
 #endif
-#if WASM_ENABLE_BRANCH_HINTS != 0
+#if WASM_ENABLE_BRANCH_HINTS != 0 || WASM_ENABLE_COMPILATION_HINTS != 0
     for (size_t i = 0; i < module->function_count; i++) {
-        // be carefull when adding more hints. This only works as long as
-        // the hint structs have been allocated all at once as an array.
-        // With only branch-hints at the moment, this is the case.
-        if (module->function_hints != NULL && module->function_hints[i] != NULL)
-            wasm_runtime_free(module->function_hints[i]);
+        if (module->function_hints != NULL
+            && module->function_hints[i] != NULL) {
+            // properly free all additionally allocated data:
+            // each code metadata section parsed adds a chain of hints to the
+            // function hints. That chain of WASMCompilationHint specializations
+            // is allocated as an array. We need to find the starts of the
+            // separate arrays to free them all properly.
+            struct WASMCompilationHint *curr = module->function_hints[i];
+            struct WASMCompilationHint *last_chain_start = curr;
+            while (curr != NULL) {
+                if (curr->type != last_chain_start->type) {
+                    // we switched chains -> deallocate previous chain and reset
+                    wasm_runtime_free(last_chain_start);
+                    last_chain_start = curr;
+                }
+                if (curr->type == WASM_COMPILATION_HINT_CALL_TARGETS) {
+                    wasm_runtime_free(
+                        ((struct WASMCompilationHintCallTargets *)curr)->hints);
+                }
+                curr = curr->next;
+            }
+            wasm_runtime_free(last_chain_start);
+        }
     }
     if (module->function_hints != NULL)
         wasm_runtime_free(module->function_hints);

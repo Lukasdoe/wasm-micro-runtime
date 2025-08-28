@@ -752,7 +752,7 @@ struct WASMFunction {
 #endif
 #endif
 
-#if WASM_ENABLE_BRANCH_HINTS != 0
+#if WASM_ENABLE_BRANCH_HINTS != 0 || WASM_ENABLE_COMPILATION_HINTS != 0
     uint8 *code_body_begin;
 #endif
 };
@@ -765,7 +765,7 @@ struct WASMTag {
 };
 #endif
 
-#if WASM_ENABLE_BRANCH_HINTS != 0
+#if WASM_ENABLE_BRANCH_HINTS != 0 || WASM_ENABLE_COMPILATION_HINTS != 0
 enum WASMCompilationHintType {
     DUMMY = 0,
     WASM_COMPILATION_HINT_BRANCH = 1,
@@ -1087,7 +1087,7 @@ struct WASMModule {
     const uint8 *name_section_buf_end;
 #endif
 
-#if WASM_ENABLE_BRANCH_HINTS != 0
+#if WASM_ENABLE_BRANCH_HINTS != 0 || WASM_ENABLE_COMPILATION_HINTS != 0
     struct WASMCompilationHint **function_hints;
 #endif
 
