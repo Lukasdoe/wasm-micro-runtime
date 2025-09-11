@@ -5566,6 +5566,7 @@ fail:
 }
 #endif
 
+#if WASM_ENABLE_BRANCH_HINTS != 0 || WASM_ENABLE_COMPILATION_HINTS != 0
 typedef bool (*CompileHintSig)(const uint8 *, const uint8 *, uint32, void *,
                                char *, uint32, WASMModule *);
 static bool
@@ -5633,6 +5634,7 @@ read_code_metadata_section(const uint8 *buf, const uint8 *buf_end,
 fail:
     return false;
 }
+#endif
 
 #if WASM_ENABLE_BRANCH_HINTS != 0
 bool

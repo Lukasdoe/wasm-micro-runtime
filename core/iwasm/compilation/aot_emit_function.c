@@ -140,9 +140,9 @@ aot_emit_call_target_hint(AOTCompContext *comp_ctx, AOTFuncContext *func_ctx,
         // (could be enhanced with the instruction frequency hints)
         md_nodes[2] = LLVMValueAsMetadata(I64_CONST(100));
 
-        struct WASMCompilationHintCallTargetsHint *target = ct_hint->hints;
-        unsigned off = 3;
-        while (target != NULL) {
+        for (size_t i = 0; i < ct_hint->target_count; ++i) {
+            struct WASMCompilationHintCallTargetsHint *target =
+                &ct_hint->hints[i];
             char target_func_name[48];
             snprintf(target_func_name, sizeof(target_func_name), "%s%d%s",
                      AOT_FUNC_PREFIX,
@@ -150,12 +150,11 @@ aot_emit_call_target_hint(AOTCompContext *comp_ctx, AOTFuncContext *func_ctx,
                      "_wrapper");
             const uint64_t func_name_hash =
                 aot_func_name_hash(target_func_name);
-            md_nodes[off++] = LLVMValueAsMetadata(I64_CONST(func_name_hash));
-            md_nodes[off++] =
+            md_nodes[i * 2 + 3] =
+                LLVMValueAsMetadata(I64_CONST(func_name_hash));
+            md_nodes[i * 2 + 3 + 1] =
                 LLVMValueAsMetadata(I64_CONST(target->call_frequency));
         }
-        assert(off == md_node_cnt);
-
         LLVMMetadataRef meta_data =
             LLVMMDNodeInContext2(comp_ctx->context, md_nodes, md_node_cnt);
         LLVMValueRef meta_data_as_value =
@@ -1973,6 +1972,7 @@ fail:
 }
 #endif
 
+#if 0
 static bool
 call_aot_call_indirect_func(AOTCompContext *comp_ctx, AOTFuncContext *func_ctx,
                             AOTFuncType *aot_func_type,
@@ -1982,7 +1982,183 @@ call_aot_call_indirect_func(AOTCompContext *comp_ctx, AOTFuncContext *func_ctx,
                             LLVMValueRef *param_values, uint32 param_count,
                             uint32 param_cell_num, uint32 result_count,
                             uint8 *wasm_ret_types, LLVMValueRef *value_rets,
-                            LLVMValueRef *p_res)
+                            LLVMValueRef *p_res, uint32 instr_offset)
+{
+    LLVMValueRef func_ptr, func, func_idx;
+    LLVMValueRef offset, aot_module, func_ptrs_ptr, func_ptr_addr;
+    LLVMTypeRef llvm_func_type, func_ptr_type;
+    LLVMValueRef call_result;
+    uint32 total_param_count, ext_ret_count, i;
+    LLVMValueRef *call_param_values = NULL;
+    uint64 total_size;
+
+    /* Get module instance from exec_env */
+    if (!(offset = I32_CONST(offsetof(WASMExecEnv, module_inst)))) {
+        aot_set_last_error("llvm build const failed.");
+        goto fail;
+    }
+    if (!(aot_module = LLVMBuildInBoundsGEP2(comp_ctx->builder, INT8_TYPE,
+                                             func_ctx->exec_env, &offset, 1,
+                                             "aot_module_i8p"))) {
+        aot_set_last_error("llvm build inbounds gep failed.");
+        goto fail;
+    }
+    if (!(aot_module = LLVMBuildBitCast(comp_ctx->builder, aot_module,
+                                        OPQ_PTR_TYPE, "aot_module_ptr"))) {
+        aot_set_last_error("llvm build bit cast failed.");
+        goto fail;
+    }
+
+    /* Load function index from table element (already resolved in call_indirect
+     * compilation) */
+    func_idx = table_elem_idx; /* This should be the resolved func_idx from
+                                  table lookup */
+
+    /* Get func_ptrs array from module instance */
+    if (!(offset = I32_CONST(offsetof(WASMModuleInstance, func_ptrs)))) {
+        aot_set_last_error("llvm build const failed.");
+        goto fail;
+    }
+    if (!(func_ptrs_ptr =
+              LLVMBuildInBoundsGEP2(comp_ctx->builder, INT8_TYPE, aot_module,
+                                    &offset, 1, "func_ptrs_ptr"))) {
+        aot_set_last_error("llvm build inbounds gep failed.");
+        goto fail;
+    }
+    if (!(func_ptrs_ptr = LLVMBuildBitCast(comp_ctx->builder, func_ptrs_ptr,
+                                           comp_ctx->exec_env_type,
+                                           "func_ptrs_ptr_cast"))) {
+        aot_set_last_error("llvm build bit cast failed.");
+        goto fail;
+    }
+    if (!(func_ptrs_ptr = LLVMBuildLoad2(comp_ctx->builder, OPQ_PTR_TYPE,
+                                         func_ptrs_ptr, "func_ptrs_array"))) {
+        aot_set_last_error("llvm build load failed.");
+        goto fail;
+    }
+
+    /* Get function pointer: func_ptrs[func_idx] */
+    if (!(func_ptr_addr = LLVMBuildInBoundsGEP2(comp_ctx->builder, OPQ_PTR_TYPE,
+                                                func_ptrs_ptr, &func_idx, 1,
+                                                "func_ptr_addr"))) {
+        aot_set_last_error("llvm build inbounds gep failed.");
+        goto fail;
+    }
+    if (!(func_ptr = LLVMBuildLoad2(comp_ctx->builder, OPQ_PTR_TYPE,
+                                    func_ptr_addr, "func_ptr"))) {
+        aot_set_last_error("llvm build load failed.");
+        goto fail;
+    }
+
+    /* Build function type with exec_env + function parameters + extra return
+     * pointers */
+    ext_ret_count = result_count > 1 ? result_count - 1 : 0;
+    total_param_count =
+        1 + param_count + ext_ret_count; /* exec_env + params + extra_rets */
+
+    /* Create LLVM function type */
+    LLVMTypeRef *func_param_types = NULL;
+    total_size = sizeof(LLVMTypeRef) * (uint64)total_param_count;
+    if (total_size >= UINT32_MAX
+        || !(func_param_types = wasm_runtime_malloc((uint32)total_size))) {
+        aot_set_last_error("allocate memory failed.");
+        goto fail;
+    }
+
+    /* Set up parameter types: exec_env + wasm params + extra return pointers */
+    func_param_types[0] = comp_ctx->exec_env_type;
+    for (i = 0; i < param_count; i++) {
+        func_param_types[i + 1] = param_types[i];
+    }
+    /* Add pointer types for extra return values */
+    for (i = 0; i < ext_ret_count; i++) {
+        func_param_types[1 + param_count + i] =
+            LLVMPointerType(TO_LLVM_TYPE(wasm_ret_types[i + 1]), 0);
+    }
+
+    /* Create function type */
+    LLVMTypeRef ret_type =
+        result_count > 0 ? TO_LLVM_TYPE(wasm_ret_types[0]) : VOID_TYPE;
+    if (!(llvm_func_type = LLVMFunctionType(ret_type, func_param_types,
+                                            total_param_count, false))) {
+        aot_set_last_error("llvm create function type failed.");
+        wasm_runtime_free(func_param_types);
+        goto fail;
+    }
+    wasm_runtime_free(func_param_types);
+
+    /* Cast function pointer to correct type */
+    if (!(func_ptr_type = LLVMPointerType(llvm_func_type, 0))) {
+        aot_set_last_error("llvm create function pointer type failed.");
+        goto fail;
+    }
+    if (!(func = LLVMBuildBitCast(comp_ctx->builder, func_ptr, func_ptr_type,
+                                  "indirect_func"))) {
+        aot_set_last_error("llvm build bit cast failed.");
+        goto fail;
+    }
+
+    /* Prepare call parameters: exec_env + wasm params + extra return pointers
+     */
+    total_size = sizeof(LLVMValueRef) * (uint64)total_param_count;
+    if (total_size >= UINT32_MAX
+        || !(call_param_values = wasm_runtime_malloc((uint32)total_size))) {
+        aot_set_last_error("allocate memory failed.");
+        goto fail;
+    }
+
+    call_param_values[0] = func_ctx->exec_env;
+    for (i = 0; i < param_count; i++) {
+        call_param_values[i + 1] = param_values[i];
+    }
+    /* Add extra return value pointers (these should be set up by caller) */
+    for (i = 0; i < ext_ret_count; i++) {
+        call_param_values[1 + param_count + i] = param_values[param_count + i];
+    }
+
+    /* Call the function */
+    if (!(call_result =
+              LLVMBuildCall2(comp_ctx->builder, llvm_func_type, func,
+                             call_param_values, total_param_count,
+                             result_count > 0 ? "call_indirect_result" : ""))) {
+        aot_set_last_error("llvm build call failed.");
+        wasm_runtime_free(call_param_values);
+        goto fail;
+    }
+
+#if WASM_ENABLE_COMPILATION_HINTS != 0
+    aot_emit_call_target_hint(comp_ctx, func_ctx, instr_offset, call_result);
+#endif
+
+    /* Set return values */
+    if (result_count > 0) {
+        value_rets[0] = call_result;
+        /* Extra return values are returned through pointer parameters,
+           they will be loaded by the caller */
+    }
+
+    /* Set success result */
+    *p_res = I8_ONE;
+
+    wasm_runtime_free(call_param_values);
+    return true;
+
+fail:
+    if (call_param_values)
+        wasm_runtime_free(call_param_values);
+    return false;
+}
+#else
+static bool
+call_aot_call_indirect_func(AOTCompContext *comp_ctx, AOTFuncContext *func_ctx,
+                            AOTFuncType *aot_func_type,
+                            LLVMValueRef func_type_idx, LLVMValueRef table_idx,
+                            LLVMValueRef table_elem_idx,
+                            LLVMTypeRef *param_types,
+                            LLVMValueRef *param_values, uint32 param_count,
+                            uint32 param_cell_num, uint32 result_count,
+                            uint8 *wasm_ret_types, LLVMValueRef *value_rets,
+                            LLVMValueRef *p_res, uint32 instr_offset)
 {
     LLVMTypeRef func_type, func_ptr_type, func_param_types[6];
     LLVMTypeRef ret_type, ret_ptr_type, elem_ptr_type;
@@ -2130,6 +2306,7 @@ call_aot_call_indirect_func(AOTCompContext *comp_ctx, AOTFuncContext *func_ctx,
     *p_res = res;
     return true;
 }
+#endif
 
 bool
 aot_compile_op_call_indirect(AOTCompContext *comp_ctx, AOTFuncContext *func_ctx,
@@ -2673,12 +2850,8 @@ aot_compile_op_call_indirect(AOTCompContext *comp_ctx, AOTFuncContext *func_ctx,
     if (!call_aot_call_indirect_func(
             comp_ctx, func_ctx, func_type, ftype_idx, tbl_idx_value, elem_idx,
             param_types + 1, param_values + 1, func_param_count, param_cell_num,
-            func_result_count, wasm_ret_types, value_rets, &res))
+            func_result_count, wasm_ret_types, value_rets, &res, instr_offset))
         goto fail;
-
-#if WASM_ENABLE_COMPILATION_HINTS != 0
-    aot_emit_call_target_hint(comp_ctx, func_ctx, instr_offset, res);
-#endif
 
     /* Check whether exception was thrown when executing the function */
     if ((comp_ctx->enable_bound_check || is_win_platform(comp_ctx))
@@ -2737,6 +2910,10 @@ aot_compile_op_call_indirect(AOTCompContext *comp_ctx, AOTFuncContext *func_ctx,
         aot_set_last_error("llvm build call failed.");
         goto fail;
     }
+
+#if WASM_ENABLE_COMPILATION_HINTS != 0
+    aot_emit_call_target_hint(comp_ctx, func_ctx, instr_offset, value_ret);
+#endif
 
     /* Check whether exception was thrown when executing the function */
     if ((comp_ctx->enable_bound_check || is_win_platform(comp_ctx))
