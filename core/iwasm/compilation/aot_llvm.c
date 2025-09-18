@@ -2655,19 +2655,18 @@ aot_create_comp_context(const AOTCompData *comp_data, aot_comp_option_t option)
     memset(comp_ctx, 0, sizeof(AOTCompContext));
     comp_ctx->comp_data = comp_data;
 
-    /* Create LLVM context, module and builder */
-    comp_ctx->orc_thread_safe_context = LLVMOrcCreateNewThreadSafeContext();
-    if (!comp_ctx->orc_thread_safe_context) {
-        aot_set_last_error("create LLVM ThreadSafeContext failed.");
-        goto fail;
-    }
-
     /* Get a reference to the underlying LLVMContext, note:
          different from non LAZY JIT mode, no need to dispose this context,
          if will be disposed when the thread safe context is disposed */
-    if (!(comp_ctx->context = LLVMOrcThreadSafeContextGetContext(
-              comp_ctx->orc_thread_safe_context))) {
+    if (!(comp_ctx->context = LLVMContextCreate())) {
         aot_set_last_error("get context from LLVM ThreadSafeContext failed.");
+        goto fail;
+    }
+
+    /* Create LLVM context, module and builder */
+    comp_ctx->orc_thread_safe_context = LLVMOrcCreateNewThreadSafeContextFromLLVMContext(comp_ctx->context);
+    if (!comp_ctx->orc_thread_safe_context) {
+        aot_set_last_error("create LLVM ThreadSafeContext failed.");
         goto fail;
     }
 
