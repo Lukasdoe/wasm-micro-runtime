@@ -169,7 +169,7 @@ if (WAMR_BUILD_PLATFORM STREQUAL "windows" AND MSVC)
 endif()
 
 if (NOT WAMR_BUILD_WITH_CUSTOM_LLVM)
-  set(LLVM_ROOT "${PROJECT_SOURCE_DIR}/../core/deps/llvm/build")
+  set(LLVM_ROOT "${PROJECT_SOURCE_DIR}/../core/deps/llvm/")
   if (NOT EXISTS "${LLVM_ROOT}")
     message(FATAL_ERROR "Cannot find LLVM dir: ${LLVM_ROOT}")
   endif ()
