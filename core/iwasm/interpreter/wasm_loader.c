@@ -5604,10 +5604,10 @@ read_code_metadata_section(const uint8 *buf, const uint8 *buf_end,
 
         uint32 num_hints;
         read_leb_uint32(buf, buf_end, num_hints);
-        struct WASMCompilationHint *new_hints = loader_malloc(
+        void* new_hints = loader_malloc(
             hint_struct_size * num_hints, error_buf, error_buf_size);
         for (uint32 j = 0; j < num_hints; ++j) {
-            struct WASMCompilationHint *new_hint = &new_hints[j];
+            struct WASMCompilationHint *new_hint = new_hints + j * hint_struct_size;
             new_hint->next = NULL;
             new_hint->used = false;
             read_leb_uint32(buf, buf_end, new_hint->offset);
@@ -7633,7 +7633,7 @@ wasm_loader_unload(WASMModule *module)
             struct WASMCompilationHint *last_chain_start = curr;
             while (curr != NULL) {
                 if (!curr->used) {
-                    printf("Unused hint for function %lu, offset: %x\n",
+                    printf("Unused hint for function %u, offset: %x\n",
                            i + module->import_count, curr->offset);
                 }
                 if (curr->type != last_chain_start->type) {
