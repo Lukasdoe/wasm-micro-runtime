@@ -279,18 +279,29 @@ aot_emit_branch_hint(AOTCompContext *comp_ctx, AOTFuncContext *func_ctx,
         hint = hint->next;
     }
     if (hint != NULL) {
-        ((struct WASMCompilationHintBranchHint *)hint)->used = true;
-        // same weight llvm MDBuilder::createLikelyBranchWeights assigns
-        const uint32_t likely_weight = (1U << 20) - 1;
-        const uint32_t unlikely_weight = 1;
-        aot_set_cond_br_weights(
-            comp_ctx, br_if_instr,
-            ((struct WASMCompilationHintBranchHint *)hint)->is_likely
-                ? likely_weight
-                : unlikely_weight,
-            ((struct WASMCompilationHintBranchHint *)hint)->is_likely
-                ? unlikely_weight
-                : likely_weight);
+        struct WASMCompilationHintBranchHint* bh = (struct WASMCompilationHintBranchHint*)hint;
+        bh->used = true;
+        if (func_ctx->binary_hints) {
+            // same weight llvm MDBuilder::createLikelyBranchWeights assigns
+            const int32_t likely_weight = (1U << 20) - 1;
+            const int32_t unlikely_weight = 1;
+            aot_set_cond_br_weights(
+                comp_ctx, br_if_instr,
+                bh->hint == 0x1
+                    ? likely_weight
+                    : unlikely_weight,
+                bh->hint == 0x1
+                    ? unlikely_weight
+                    : likely_weight);
+        } else {
+            const int32_t max_weight = (1U << 20) - 1;
+            // 127 is the highest uleb128 integer that has a single byte encoding
+            const int32_t max_hint = 127;
+            const int32_t factor = max_weight / max_hint;
+            const int32_t true_weight = factor * ((struct WASMCompilationHintBranchHint *)hint)->hint;
+            const int32_t false_weight = factor * (max_hint - ((struct WASMCompilationHintBranchHint *)hint)->hint);
+            aot_set_cond_br_weights(comp_ctx, br_if_instr, true_weight, false_weight);
+        }
     }
 }
 #endif

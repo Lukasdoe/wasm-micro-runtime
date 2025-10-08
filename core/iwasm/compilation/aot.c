@@ -878,6 +878,7 @@ aot_create_comp_data(WASMModule *module, const char *target_arch,
 
 #if WASM_ENABLE_BRANCH_HINTS != 0 || WASM_ENABLE_COMPILATION_HINTS != 0
     comp_data->function_hints = module->function_hints;
+    comp_data->binary_hints = module->binary_hints;
 #endif
 
     aot_init_aux_data(comp_data, module);

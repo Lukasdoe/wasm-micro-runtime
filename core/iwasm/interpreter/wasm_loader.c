@@ -5595,6 +5595,7 @@ read_code_metadata_section(const uint8 *buf, const uint8 *buf_end,
             goto fail;
         }
 
+        assert(module->function_count > func_idx - module->import_function_count);
         struct WASMCompilationHint *current_hint =
             (struct WASMCompilationHint *)&module
                 ->function_hints[func_idx - module->import_function_count];
@@ -5655,16 +5656,9 @@ handle_compilation_hint_branch_hint_processor(const uint8 *buf,
         return false;
     }
     CHECK_BUF(buf, buf_end, 1);
-    const uint8 data = read_uint8(buf);
-    if (data == 0x00)
-        hint->is_likely = false;
-    else if (data == 0x01)
-        hint->is_likely = true;
-    else {
-        set_error_buf_v(error_buf, error_buf_size,
-                        "invalid branch hint value, expected 0 or 1, got %d",
-                        data);
-        goto fail;
+    hint->hint = read_uint8(buf);
+    if (hint->hint > 0x1) {
+        module->binary_hints = false;
     }
     return true;
 fail:
@@ -5675,10 +5669,16 @@ handle_branch_hint_section(const uint8 *buf, const uint8 *buf_end,
                            WASMModule *module, char *error_buf,
                            uint32 error_buf_size)
 {
-    return read_code_metadata_section(
+    const bool ret = read_code_metadata_section(
         buf, buf_end, module, error_buf, error_buf_size,
         sizeof(struct WASMCompilationHintCallTargets),
         handle_compilation_hint_branch_hint_processor);
+    if (module->binary_hints) {
+        printf("Using binary branch hints.\n");
+    } else {
+        printf("Using non-binary branch hints.\n");
+    }
+    return ret;
 }
 #endif
 
@@ -6946,6 +6946,10 @@ create_module(char *name, char *error_buf, uint32 error_buf_size)
 #if WASM_ENABLE_LIBC_WASI != 0
     wasi_args_set_defaults(&module->wasi_args);
 #endif /* WASM_ENABLE_LIBC_WASI != 0 */
+
+#if WASM_ENABLE_BRANCH_HINTS != 0 || WASM_ENABLE_COMPILATION_HINTS != 0
+    module->binary_hints = true;
+#endif
 
     (void)ret;
     return module;

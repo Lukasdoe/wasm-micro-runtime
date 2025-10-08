@@ -784,7 +784,7 @@ struct WASMCompilationHintBranchHint {
     bool used;
 
     // custom field
-    bool is_likely;
+    uint8 hint;
 };
 struct WASMCompilationHintCallTargetsHint {
     uint32 func_idx;
@@ -1092,6 +1092,7 @@ struct WASMModule {
 
 #if WASM_ENABLE_BRANCH_HINTS != 0 || WASM_ENABLE_COMPILATION_HINTS != 0
     struct WASMCompilationHint **function_hints;
+    bool binary_hints;
 #endif
 
 #if WASM_ENABLE_LOAD_CUSTOM_SECTION != 0

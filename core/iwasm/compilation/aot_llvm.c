@@ -1968,6 +1968,7 @@ aot_create_func_context(const AOTCompData *comp_data, AOTCompContext *comp_ctx,
         comp_ctx->comp_data->function_hints
             ? comp_ctx->comp_data->function_hints[func_index]
             : NULL;
+    func_ctx->binary_hints = comp_ctx->comp_data->binary_hints;
 #endif
 
     return func_ctx;

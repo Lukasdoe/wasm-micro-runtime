@@ -303,6 +303,7 @@ typedef struct AOTCompData {
 
 #if WASM_ENABLE_BRANCH_HINTS != 0 || WASM_ENABLE_COMPILATION_HINTS != 0
     struct WASMCompilationHint **function_hints;
+    bool binary_hints;
 #endif
 } AOTCompData;
 
