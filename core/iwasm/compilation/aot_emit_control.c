@@ -296,13 +296,15 @@ aot_emit_branch_hint(AOTCompContext *comp_ctx, AOTFuncContext *func_ctx,
         } else {
             const int32_t max_weight = (1U << 31) - 1;
             // 127 is the highest uleb128 integer that has a single byte encoding
-            const int32_t max_hint = 127;
+            const int32_t max_hint = 128;
             const int32_t factor = max_weight / max_hint;
-            int32_t true_weight = factor * ((struct WASMCompilationHintBranchHint *)hint)->hint;
+            int32_t true_weight = factor * (((struct WASMCompilationHintBranchHint *)hint)->hint + 1);
             int32_t false_weight = factor * (max_hint - ((struct WASMCompilationHintBranchHint *)hint)->hint);
 
             true_weight = true_weight == 0 ? 1 : true_weight;
+            true_weight = true_weight > max_weight ? max_weight : true_weight;
             false_weight = false_weight == 0 ? 1 : false_weight;
+            false_weight = false_weight > max_weight ? max_weight : false_weight;
 
             aot_set_cond_br_weights(comp_ctx, br_if_instr, true_weight, false_weight);
         }
