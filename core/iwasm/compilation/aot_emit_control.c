@@ -281,8 +281,8 @@ aot_emit_branch_hint(AOTCompContext *comp_ctx, AOTFuncContext *func_ctx,
     if (hint != NULL) {
         struct WASMCompilationHintBranchHint* bh = (struct WASMCompilationHintBranchHint*)hint;
         bh->used = true;
-        if (func_ctx->binary_hints) {
-            if (comp_ctx->non_binary_bits != 0 && comp_ctx->non_binary_bits != 1) {
+        if (func_ctx->binary_hints && comp_ctx->non_binary_bits != 1) {
+            if (comp_ctx->non_binary_bits != 0) {
                 LOG_ERROR("\nASSERTION FAILED: Mixed binary branch hints with non binary bits flag.\n");
                 abort();
             }
@@ -306,7 +306,6 @@ aot_emit_branch_hint(AOTCompContext *comp_ctx, AOTFuncContext *func_ctx,
             const int32_t max_weight = (1U << 31) - 1;
             // 127 is the highest uleb128 integer that has a single byte encoding
             const int32_t max_hint = (int32_t)pow(2, comp_ctx->non_binary_bits) - 1;
-            printf("max_hint: %d for num bits %d\n", max_hint, comp_ctx->non_binary_bits);
             if (hint_val > max_hint) {
                 LOG_ERROR("\nASSERTION FAILED: Hint value too high!\n");
                 abort();
