@@ -282,7 +282,7 @@ aot_emit_branch_hint(AOTCompContext *comp_ctx, AOTFuncContext *func_ctx,
         struct WASMCompilationHintBranchHint* bh = (struct WASMCompilationHintBranchHint*)hint;
         bh->used = true;
         if (func_ctx->binary_hints) {
-            if (comp_ctx->non_binary_bits != 0) {
+            if (comp_ctx->non_binary_bits != 0 && comp_ctx->non_binary_bits != 1) {
                 LOG_ERROR("\nASSERTION FAILED: Mixed binary branch hints with non binary bits flag.\n");
                 abort();
             }
@@ -312,8 +312,8 @@ aot_emit_branch_hint(AOTCompContext *comp_ctx, AOTFuncContext *func_ctx,
                 abort();
             }
             const int32_t factor = max_weight / max_hint;
-            int32_t true_weight = factor * (((struct WASMCompilationHintBranchHint *)hint)->hint);
-            int32_t false_weight = factor * (max_hint - ((struct WASMCompilationHintBranchHint *)hint)->hint);
+            int32_t true_weight = factor * hint_val;
+            int32_t false_weight = factor * (max_hint - hint_val);
 
             true_weight = true_weight == 0 ? 1 : true_weight;
             true_weight = true_weight > max_weight ? max_weight : true_weight;
