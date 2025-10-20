@@ -282,6 +282,10 @@ aot_emit_branch_hint(AOTCompContext *comp_ctx, AOTFuncContext *func_ctx,
         struct WASMCompilationHintBranchHint* bh = (struct WASMCompilationHintBranchHint*)hint;
         bh->used = true;
         if (func_ctx->binary_hints) {
+            if (comp_ctx->non_binary_bits != 0) {
+                LOG_ERROR("\nASSERTION FAILED: Mixed binary branch hints with non binary bits flag.\n");
+                abort();
+            }
             // same weight llvm MDBuilder::createLikelyBranchWeights assigns
             const int32_t likely_weight = (1U << 31) - 1;
             const int32_t unlikely_weight = 1;
@@ -294,11 +298,21 @@ aot_emit_branch_hint(AOTCompContext *comp_ctx, AOTFuncContext *func_ctx,
                     ? unlikely_weight
                     : likely_weight);
         } else {
+            if (comp_ctx->non_binary_bits == 0) {
+                LOG_ERROR("\nASSERTION FAILED: Non-binary branch hints bits are 0!\n");
+                abort();
+            }
+            const uint8 hint_val = ((struct WASMCompilationHintBranchHint *)hint)->hint;
             const int32_t max_weight = (1U << 31) - 1;
             // 127 is the highest uleb128 integer that has a single byte encoding
-            const int32_t max_hint = 128;
+            const int32_t max_hint = (int32_t)pow(2, comp_ctx->non_binary_bits) - 1;
+            printf("max_hint: %d for num bits %d\n", max_hint, comp_ctx->non_binary_bits);
+            if (hint_val > max_hint) {
+                LOG_ERROR("\nASSERTION FAILED: Hint value too high!\n");
+                abort();
+            }
             const int32_t factor = max_weight / max_hint;
-            int32_t true_weight = factor * (((struct WASMCompilationHintBranchHint *)hint)->hint + 1);
+            int32_t true_weight = factor * (((struct WASMCompilationHintBranchHint *)hint)->hint);
             int32_t false_weight = factor * (max_hint - ((struct WASMCompilationHintBranchHint *)hint)->hint);
 
             true_weight = true_weight == 0 ? 1 : true_weight;

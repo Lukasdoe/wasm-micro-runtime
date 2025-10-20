@@ -81,6 +81,7 @@ typedef struct AOTCompOption {
     bool disable_llvm_lto;
     bool enable_llvm_pgo;
     bool enable_custom_pgo;
+    unsigned non_binary_bits;
     bool enable_stack_estimation;
     bool quick_invoke_c_api_import;
     bool enable_shared_heap;

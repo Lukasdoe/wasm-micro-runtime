@@ -475,6 +475,8 @@ typedef struct AOTCompContext {
     /* Enable custom PGO (Profile-Guided Optimization) */
     bool enable_custom_pgo;
 
+    unsigned non_binary_bits;
+
     /* Enable extended constant expression */
     bool enable_extended_const;
 

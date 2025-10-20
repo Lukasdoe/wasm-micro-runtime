@@ -614,6 +614,9 @@ main(int argc, char *argv[])
         else if (!strcmp(argv[0], "--enable-custom-pgo")) {
             option.enable_custom_pgo = true;
         }
+        else if (!strncmp(argv[0], "--non-bin-bits=", 15)) {
+            option.non_binary_bits = atoi(argv[0] + 15);
+        }
         else if (!strncmp(argv[0], "--enable-llvm-passes=", 21)) {
             if (argv[0][21] == '\0')
                 PRINT_HELP_AND_EXIT();

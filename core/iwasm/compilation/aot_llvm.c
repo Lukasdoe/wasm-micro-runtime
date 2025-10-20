@@ -2779,6 +2779,8 @@ aot_create_comp_context(const AOTCompData *comp_data, aot_comp_option_t option)
     if (option->enable_custom_pgo)
         comp_ctx->enable_custom_pgo = true;
 
+    comp_ctx->non_binary_bits = option->non_binary_bits;
+
     if (option->use_prof_file)
         comp_ctx->use_prof_file = option->use_prof_file;
 
