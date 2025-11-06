@@ -3899,6 +3899,13 @@ aot_resolve_object_relocation_group(AOTObjectData *obj_data,
     bool is_binary_little_endian = is_little_endian_binary(obj_data);
     bool has_addend = str_starts_with(group->section_name, ".rela");
     uint8 *rela_content = NULL;
+    struct
+    {
+        const char* section_name;
+        // LLVMSectionIteratorRef sec_itr;
+    }* sec_infos = NULL;
+    size_t sec_infos_count = 0;
+    LLVMSectionIteratorRef sec_itr = NULL;
 
     /* calculate relocations count and allocate memory */
     if (!get_relocations_count(rel_sec, &group->relocation_count))
@@ -3971,24 +3978,34 @@ aot_resolve_object_relocation_group(AOTObjectData *obj_data,
             LLVMGetSymbolNameAndUnDecorate(rel_sym, obj_data->target_info);
         relocation->relocation_offset = offset;
         if (!strcmp(group->section_name, ".rela.text.unlikely.")
-            || !strcmp(group->section_name, ".rel.text.unlikely.")) {
+            || !strcmp(group->section_name, ".rel.text.unlikely.")
+            || !strcmp(group->section_name, ".rela.ltext.unlikely.")
+            || !strcmp(group->section_name, ".rel.ltext.unlikely.")) {
             relocation->relocation_offset += align_uint(obj_data->text_size, 4);
         }
         else if (!strcmp(group->section_name, ".rela.text.hot.")
-                 || !strcmp(group->section_name, ".rel.text.hot.")) {
+                 || !strcmp(group->section_name, ".rel.text.hot.")
+                 || !strcmp(group->section_name, ".rela.ltext.hot.")
+                 || !strcmp(group->section_name, ".rel.ltext.hot.")) {
             relocation->relocation_offset +=
                 align_uint(obj_data->text_size, 4)
                 + align_uint(obj_data->text_unlikely_size, 4);
         }
-        if (!strcmp(relocation->symbol_name, ".text.unlikely.")) {
+        if (!strcmp(relocation->symbol_name, ".text.unlikely.")
+            || !strcmp(relocation->symbol_name, ".ltext.unlikely.")) {
             relocation->symbol_name = ".text";
             relocation->relocation_addend += align_uint(obj_data->text_size, 4);
         }
-        if (!strcmp(relocation->symbol_name, ".text.hot.")) {
+        if (!strcmp(relocation->symbol_name, ".text.hot.")
+            || !strcmp(relocation->symbol_name, ".ltext.hot.")) {
             relocation->symbol_name = ".text";
             relocation->relocation_addend +=
                 align_uint(obj_data->text_size, 4)
                 + align_uint(obj_data->text_unlikely_size, 4);
+        }
+        /* Convert .ltext to .text as they represent the same section */
+        if (!strcmp(relocation->symbol_name, ".ltext")) {
+            relocation->symbol_name = ".text";
         }
 
         /*
@@ -4004,7 +4021,6 @@ aot_resolve_object_relocation_group(AOTObjectData *obj_data,
              || obj_data->comp_ctx->enable_custom_pgo)
             && (!strcmp(relocation->symbol_name, "__llvm_prf_cnts")
                 || !strcmp(relocation->symbol_name, "__llvm_prf_data"))) {
-            LLVMSectionIteratorRef sec_itr;
             char buf[32], *section_name;
             uint32 prof_section_idx = 0;
 
@@ -4014,47 +4030,56 @@ aot_resolve_object_relocation_group(AOTObjectData *obj_data,
                 LLVMDisposeSymbolIterator(rel_sym);
                 goto fail;
             }
-            while (!LLVMObjectFileIsSectionIteratorAtEnd(obj_data->binary,
-                                                         sec_itr)) {
-                section_name = (char *)LLVMGetSectionName(sec_itr);
-                if (section_name
-                    && !strcmp(section_name, relocation->symbol_name)) {
+
+            if (sec_infos == NULL) {
+                while (!LLVMObjectFileIsSectionIteratorAtEnd(obj_data->binary, sec_itr)) {
+                    sec_infos_count++;
+                    LLVMMoveToNextSection(sec_itr);
+                }
+                sec_infos = wasm_runtime_malloc(sizeof(*sec_infos) * sec_infos_count);
+                sec_itr = LLVMObjectFileCopySectionIterator(obj_data->binary);
+                for (size_t i = 0; i < sec_infos_count; ++i) {
+                    section_name = (char *)LLVMGetSectionName(sec_itr);
+                    sec_infos[i].section_name = section_name;
+                    LLVMMoveToNextSection(sec_itr);
+                }
+                sec_itr = LLVMObjectFileCopySectionIterator(obj_data->binary);
+            }
+
+            sec_itr = LLVMObjectFileCopySectionIterator(obj_data->binary);
+            for (size_t i = 0, j = 0; i < sec_infos_count; ++i) {
+                if (sec_infos[i].section_name
+                    && !strcmp(sec_infos[i].section_name, relocation->symbol_name)) {
+                    for (; j < i; ++j) LLVMMoveToNextSection(sec_itr);
                     if (LLVMGetSectionContainsSymbol(sec_itr, rel_sym))
                         break;
                     prof_section_idx++;
                 }
-                LLVMMoveToNextSection(sec_itr);
             }
-            LLVMDisposeSectionIterator(sec_itr);
 
             if (!strcmp(group->section_name, ".rela.text")
-                || !strcmp(group->section_name, ".rel.text")) {
-                snprintf(buf, sizeof(buf), "%s%u", relocation->symbol_name,
-                         prof_section_idx);
-                size = (uint32)(strlen(buf) + 1);
-                if (!(relocation->symbol_name = wasm_runtime_malloc(size))) {
-                    aot_set_last_error(
-                        "allocate memory for relocation symbol name failed.");
-                    LLVMDisposeSymbolIterator(rel_sym);
-                    goto fail;
-                }
-                bh_memcpy_s(relocation->symbol_name, size, buf, size);
-                relocation->is_symbol_name_allocated = true;
-            }
-            else if (!strncmp(group->section_name, ".rela__llvm_prf_data", 20)
-                     || !strncmp(group->section_name, ".rel__llvm_prf_data",
-                                 19)) {
-                snprintf(buf, sizeof(buf), "%s%u", relocation->symbol_name,
-                         prof_section_idx);
-                size = (uint32)(strlen(buf) + 1);
-                if (!(relocation->symbol_name = wasm_runtime_malloc(size))) {
-                    aot_set_last_error(
-                        "allocate memory for relocation symbol name failed.");
-                    LLVMDisposeSymbolIterator(rel_sym);
-                    goto fail;
-                }
-                bh_memcpy_s(relocation->symbol_name, size, buf, size);
-                relocation->is_symbol_name_allocated = true;
+                || !strcmp(group->section_name, ".rel.text")
+                || !strncmp(group->section_name, ".rela__llvm_prf_data", 20)
+                || !strncmp(group->section_name, ".rel__llvm_prf_data", 19)
+                || !strcmp(group->section_name, ".rela.ltext")
+                || !strcmp(group->section_name, ".rel.ltext")
+            ) {
+                    snprintf(buf, sizeof(buf), "%s%u", relocation->symbol_name,
+                             prof_section_idx);
+                    size = (uint32)(strlen(buf) + 1);
+                    if (!(relocation->symbol_name = wasm_runtime_malloc(size))) {
+                        aot_set_last_error(
+                            "allocate memory for relocation symbol name failed.");
+                        LLVMDisposeSymbolIterator(rel_sym);
+                        goto fail;
+                    }
+                    bh_memcpy_s(relocation->symbol_name, size, buf, size);
+                    relocation->is_symbol_name_allocated = true;
+            } else {
+                aot_set_last_error_v("invalid relocation group for PGO: %s",
+                                     group->section_name);
+                LLVMDisposeSymbolIterator(rel_sym);
+                goto fail;
             }
         }
 
@@ -4104,6 +4129,12 @@ aot_resolve_object_relocation_group(AOTObjectData *obj_data,
         LLVMDisposeSymbolIterator(rel_sym);
         LLVMMoveToNextRelocation(rel_itr);
         relocation++;
+    }
+    if (sec_itr) {
+        LLVMDisposeSectionIterator(sec_itr);
+    }
+    if (sec_infos) {
+        wasm_runtime_free(sec_infos);
     }
     LLVMDisposeRelocationIterator(rel_itr);
     return true;
