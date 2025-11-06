@@ -305,20 +305,22 @@ aot_emit_branch_hint(AOTCompContext *comp_ctx, AOTFuncContext *func_ctx,
             const uint8 hint_val = ((struct WASMCompilationHintBranchHint *)hint)->hint;
             const int32_t max_weight = (1U << 31) - 1;
             // 127 is the highest uleb128 integer that has a single byte encoding
-            const int32_t max_hint = (int32_t)pow(2, comp_ctx->non_binary_bits) - 1;
-            if (hint_val > max_hint) {
+            const int32_t num_hint_values = (int32_t)pow(2, comp_ctx->non_binary_bits);
+            if (hint_val > num_hint_values) {
                 LOG_ERROR("\nASSERTION FAILED: Hint value too high!\n");
                 abort();
             }
-            const int32_t factor = max_weight / max_hint;
+            const int32_t factor = max_weight / num_hint_values;
             int32_t true_weight = factor * hint_val;
-            int32_t false_weight = factor * (max_hint - hint_val);
+            int32_t false_weight = factor * (num_hint_values - hint_val);
 
-            true_weight = true_weight == 0 ? 1 : true_weight;
-            true_weight = true_weight > max_weight ? max_weight : true_weight;
-            false_weight = false_weight == 0 ? 1 : false_weight;
-            false_weight = false_weight > max_weight ? max_weight : false_weight;
+            int32_t corr_fac = factor / 2;
+            // true_weight = true_weight == 0 ? 1 : true_weight;
+            true_weight = true_weight > max_weight - corr_fac ? max_weight - corr_fac : true_weight + corr_fac;
+            // false_weight = false_weight == 0 ? 1 : false_weight;
+            false_weight = false_weight > max_weight - corr_fac ? max_weight - corr_fac : false_weight + corr_fac;
 
+            // printf("%d -> %d / %d (%f / %f)\n", hint_val, true_weight, false_weight, (double)true_weight / (double)max_weight, (double)false_weight / (double)max_weight);
             aot_set_cond_br_weights(comp_ctx, br_if_instr, true_weight, false_weight);
         }
     }
