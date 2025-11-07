@@ -3978,24 +3978,34 @@ aot_resolve_object_relocation_group(AOTObjectData *obj_data,
             LLVMGetSymbolNameAndUnDecorate(rel_sym, obj_data->target_info);
         relocation->relocation_offset = offset;
         if (!strcmp(group->section_name, ".rela.text.unlikely.")
-            || !strcmp(group->section_name, ".rel.text.unlikely.")) {
+            || !strcmp(group->section_name, ".rel.text.unlikely.")
+            || !strcmp(group->section_name, ".rela.ltext.unlikely.")
+            || !strcmp(group->section_name, ".rel.ltext.unlikely.")) {
             relocation->relocation_offset += align_uint(obj_data->text_size, 4);
         }
         else if (!strcmp(group->section_name, ".rela.text.hot.")
-                 || !strcmp(group->section_name, ".rel.text.hot.")) {
+                 || !strcmp(group->section_name, ".rel.text.hot.")
+                 || !strcmp(group->section_name, ".rela.ltext.hot.")
+                 || !strcmp(group->section_name, ".rel.ltext.hot.")) {
             relocation->relocation_offset +=
                 align_uint(obj_data->text_size, 4)
                 + align_uint(obj_data->text_unlikely_size, 4);
         }
-        if (!strcmp(relocation->symbol_name, ".text.unlikely.")) {
+        if (!strcmp(relocation->symbol_name, ".text.unlikely.")
+            || !strcmp(relocation->symbol_name, ".ltext.unlikely.")) {
             relocation->symbol_name = ".text";
             relocation->relocation_addend += align_uint(obj_data->text_size, 4);
         }
-        if (!strcmp(relocation->symbol_name, ".text.hot.")) {
+        if (!strcmp(relocation->symbol_name, ".text.hot.")
+            || !strcmp(relocation->symbol_name, ".ltext.hot.")) {
             relocation->symbol_name = ".text";
             relocation->relocation_addend +=
                 align_uint(obj_data->text_size, 4)
                 + align_uint(obj_data->text_unlikely_size, 4);
+        }
+        /* Convert .ltext to .text as they represent the same section */
+        if (!strcmp(relocation->symbol_name, ".ltext")) {
+            relocation->symbol_name = ".text";
         }
 
         /*
