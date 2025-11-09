@@ -3332,7 +3332,8 @@ is_data_section(AOTObjectData *obj_data, LLVMSectionIteratorRef sec_itr,
                  || obj_data->comp_ctx->enable_custom_pgo)
                 && (!strncmp(section_name, "__llvm_prf_cnts", 15)
                     || !strncmp(section_name, "__llvm_prf_data", 15)
-                    || !strncmp(section_name, "__llvm_prf_names", 16))));
+                    || !strncmp(section_name, "__llvm_prf_names", 16)
+                    || !strncmp(section_name, "__llvm_prf_vals", 15))));
 }
 
 static bool
@@ -3373,7 +3374,8 @@ aot_resolve_object_data_sections(AOTObjectData *obj_data)
     }
 
     if (sections_count > 0) {
-        uint32 llvm_prf_cnts_idx = 0, llvm_prf_data_idx = 0;
+        uint32 llvm_prf_cnts_idx = 0, llvm_prf_data_idx = 0,
+               llvm_prf_vals_idx = 0;
         char buf[32];
 
         size = (uint32)sizeof(AOTObjectDataSection) * sections_count;
@@ -3413,6 +3415,20 @@ aot_resolve_object_data_sections(AOTObjectData *obj_data)
                          && !strcmp(name, "__llvm_prf_data")) {
                     snprintf(buf, sizeof(buf), "%s%u", name,
                              llvm_prf_data_idx++);
+                    size = (uint32)(strlen(buf) + 1);
+                    if (!(data_section->name = wasm_runtime_malloc(size))) {
+                        aot_set_last_error(
+                            "allocate memory for data section name failed.");
+                        return false;
+                    }
+                    bh_memcpy_s(data_section->name, size, buf, size);
+                    data_section->is_name_allocated = true;
+                }
+                else if ((obj_data->comp_ctx->enable_llvm_pgo
+                          || obj_data->comp_ctx->enable_custom_pgo)
+                         && !strcmp(name, "__llvm_prf_vals")) {
+                    snprintf(buf, sizeof(buf), "%s%u", name,
+                             llvm_prf_vals_idx++);
                     size = (uint32)(strlen(buf) + 1);
                     if (!(data_section->name = wasm_runtime_malloc(size))) {
                         aot_set_last_error(
@@ -4020,7 +4036,8 @@ aot_resolve_object_relocation_group(AOTObjectData *obj_data,
         if ((obj_data->comp_ctx->enable_llvm_pgo
              || obj_data->comp_ctx->enable_custom_pgo)
             && (!strcmp(relocation->symbol_name, "__llvm_prf_cnts")
-                || !strcmp(relocation->symbol_name, "__llvm_prf_data"))) {
+                || !strcmp(relocation->symbol_name, "__llvm_prf_data")
+                || !strcmp(relocation->symbol_name, "__llvm_prf_vals"))) {
             char buf[32], *section_name;
             uint32 prof_section_idx = 0;
 
@@ -4061,6 +4078,8 @@ aot_resolve_object_relocation_group(AOTObjectData *obj_data,
                 || !strcmp(group->section_name, ".rel.text")
                 || !strncmp(group->section_name, ".rela__llvm_prf_data", 20)
                 || !strncmp(group->section_name, ".rel__llvm_prf_data", 19)
+                || !strncmp(group->section_name, ".rela__llvm_prf_vals", 20)
+                || !strncmp(group->section_name, ".rel__llvm_prf_vals", 19)
                 || !strcmp(group->section_name, ".rela.ltext")
                 || !strcmp(group->section_name, ".rel.ltext")
             ) {
@@ -4169,7 +4188,9 @@ is_relocation_section_name(AOTObjectData *obj_data, char *section_name)
             || ((obj_data->comp_ctx->enable_llvm_pgo
                  || obj_data->comp_ctx->enable_custom_pgo)
                 && (!strcmp(section_name, ".rela__llvm_prf_data")
-                    || !strcmp(section_name, ".rel__llvm_prf_data")))
+                    || !strcmp(section_name, ".rel__llvm_prf_data")
+                    || !strcmp(section_name, ".rela__llvm_prf_vals")
+                    || !strcmp(section_name, ".rel__llvm_prf_vals")))
             /* ".rela.rodata.cst4/8/16/.." */
             || !strncmp(section_name, ".rela.rodata.cst",
                         strlen(".rela.rodata.cst"))
@@ -4230,7 +4251,7 @@ aot_resolve_object_relocation_groups(AOTObjectData *obj_data)
 {
     LLVMSectionIteratorRef sec_itr;
     AOTRelocationGroup *relocation_group;
-    uint32 group_count, llvm_prf_data_idx = 0;
+    uint32 group_count, llvm_prf_data_idx = 0, llvm_prf_vals_idx = 0;
     char *name;
     uint32 size;
 
@@ -4278,6 +4299,24 @@ aot_resolve_object_relocation_groups(AOTObjectData *obj_data)
                 relocation_group->is_section_name_allocated = true;
             }
 
+            if ((obj_data->comp_ctx->enable_llvm_pgo
+                 || obj_data->comp_ctx->enable_custom_pgo)
+                && (!strcmp(name, ".rela__llvm_prf_vals")
+                    || !strcmp(name, ".rel__llvm_prf_vals"))) {
+                char buf[32];
+                snprintf(buf, sizeof(buf), "%s%u", name, llvm_prf_vals_idx);
+                size = (uint32)(strlen(buf) + 1);
+                if (!(relocation_group->section_name =
+                          wasm_runtime_malloc(size))) {
+                    aot_set_last_error(
+                        "allocate memory for section name failed.");
+                    LLVMDisposeSectionIterator(sec_itr);
+                    return false;
+                }
+                bh_memcpy_s(relocation_group->section_name, size, buf, size);
+                relocation_group->is_section_name_allocated = true;
+            }
+
             if (!aot_resolve_object_relocation_group(obj_data, relocation_group,
                                                      sec_itr)) {
                 LLVMDisposeSectionIterator(sec_itr);
@@ -4289,6 +4328,13 @@ aot_resolve_object_relocation_groups(AOTObjectData *obj_data)
                 && (!strcmp(name, ".rela__llvm_prf_data")
                     || !strcmp(name, ".rel__llvm_prf_data"))) {
                 llvm_prf_data_idx++;
+            }
+
+            if ((obj_data->comp_ctx->enable_llvm_pgo
+                 || obj_data->comp_ctx->enable_custom_pgo)
+                && (!strcmp(name, ".rela__llvm_prf_vals")
+                    || !strcmp(name, ".rel__llvm_prf_vals"))) {
+                llvm_prf_vals_idx++;
             }
 
             if (!strcmp(relocation_group->section_name, ".rela.text.unlikely.")

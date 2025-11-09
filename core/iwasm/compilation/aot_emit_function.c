@@ -2725,6 +2725,76 @@ aot_compile_op_call_indirect(AOTCompContext *comp_ctx, AOTFuncContext *func_ctx,
         goto fail;
     }
 
+    /* Add profiling for indirect call target */
+    if (comp_ctx->enable_custom_pgo) {
+        char str[128];
+        snprintf(str, sizeof(str), "%d_%d",
+                 func_ctx->aot_func->func_idx
+                     + comp_ctx->comp_data->import_func_count,
+                 instr_offset);
+
+        size_t str_len = strlen(str);
+        LLVMValueRef *char_consts =
+            wasm_runtime_malloc(sizeof(LLVMValueRef) * str_len);
+        if (!char_consts) {
+            aot_set_last_error("allocate memory failed.");
+            goto fail;
+        }
+        for (size_t k = 0; k < str_len; ++k) {
+            char_consts[k] = LLVMConstInt(INT8_TYPE, str[k], false);
+        }
+
+        LLVMValueRef string_const =
+            LLVMConstArray(INT8_TYPE, char_consts, str_len);
+        wasm_runtime_free(char_consts);
+
+        LLVMValueRef glob = LLVMAddGlobal(
+            comp_ctx->module, LLVMTypeOf(string_const), "indirect_call_prof");
+        LLVMSetLinkage(glob, LLVMPrivateLinkage);
+        LLVMSetInitializer(glob, string_const);
+        LLVMSetGlobalConstant(glob, true);
+
+        /* First add a counter increment to create the profile data structures.
+         * This is required for value profiling to work. We use 1 counter. */
+        LLVMTypeRef incr_param_types[4];
+        incr_param_types[0] = INT64_PTR_TYPE;  /* name */
+        incr_param_types[1] = I64_TYPE;        /* hash */
+        incr_param_types[2] = I32_TYPE;        /* num counters */
+        incr_param_types[3] = I32_TYPE;        /* index */
+
+        aot_call_llvm_intrinsic(comp_ctx, func_ctx,
+                                "llvm.instrprof.increment", VOID_TYPE,
+                                incr_param_types, 4, glob,
+                                I64_CONST(func_ctx->aot_func->func_idx),
+                                I32_CONST(1),  /* 1 counter for this call site */
+                                I32_CONST(0)); /* counter index 0 */
+
+        /* Now add value profiling to capture the call target */
+        /* Convert func_idx to i64 for value profiling */
+        LLVMValueRef func_idx_i64 = LLVMBuildZExt(comp_ctx->builder,
+                                                   func_idx, I64_TYPE,
+                                                   "func_idx_i64");
+        if (!func_idx_i64) {
+            aot_set_last_error("llvm build zext failed.");
+            goto fail;
+        }
+
+        LLVMTypeRef value_prof_param_types[5];
+        value_prof_param_types[0] = INT64_PTR_TYPE;  /* name */
+        value_prof_param_types[1] = I64_TYPE;        /* hash */
+        value_prof_param_types[2] = I64_TYPE;        /* target value */
+        value_prof_param_types[3] = I32_TYPE;        /* value kind (0 = IPVK_IndirectCallTarget) */
+        value_prof_param_types[4] = I32_TYPE;        /* index */
+
+        aot_call_llvm_intrinsic(comp_ctx, func_ctx,
+                                "llvm.instrprof.value.profile", VOID_TYPE,
+                                value_prof_param_types, 5, glob,
+                                I64_CONST(func_ctx->aot_func->func_idx),
+                                func_idx_i64,
+                                I32_CONST(0), /* IPVK_IndirectCallTarget */
+                                I32_CONST(0)); /* call site index */
+    }
+
     if (!(value_ret = LLVMBuildCall2(comp_ctx->builder, llvm_func_type, func,
                                      param_values, total_param_count,
                                      func_result_count > 0 ? "ret" : ""))) {

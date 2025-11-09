@@ -2470,22 +2470,11 @@ destroy_object_data_sections(AOTObjectDataSection *data_sections,
         if (data_section->data) {
 #if WASM_ENABLE_STATIC_PGO != 0
             if (!strncmp(data_section->name, "__llvm_prf_data", 15)) {
-                LLVMProfileData *data = (LLVMProfileData *)data_section->data;
-                if (data->values) {
-                    uint32 num_value_sites = data->num_value_sites[0]
-                                             + data->num_value_sites[1]
-                                             + data->num_value_sites[2];
-                    uint32 j;
-                    for (j = 0; j < num_value_sites; j++) {
-                        ValueProfNode *node = data->values[j], *node_next;
-                        while (node) {
-                            node_next = node->next;
-                            wasm_runtime_free(node);
-                            node = node_next;
-                        }
-                    }
-                    wasm_runtime_free(data->values);
-                }
+                /* Note: The __llvm_prf_data section contains pointers to
+                 * value profiling data in the __llvm_prf_vals section.
+                 * This memory is part of module->merged_data_sections and
+                 * should not be freed here. It will be freed when the module
+                 * is unloaded. */
             }
 #endif
         }
@@ -3298,6 +3287,7 @@ do_text_relocation(AOTModule *module, AOTRelocationGroup *group,
                  || !strncmp(symbol, "__llvm_prf_cnts", 15)
                  || !strncmp(symbol, "__llvm_prf_data", 15)
                  || !strncmp(symbol, "__llvm_prf_names", 16)
+                 || !strncmp(symbol, "__llvm_prf_vals", 15)
 #endif
         ) {
             symbol_addr = get_data_section_addr(module, symbol, NULL);
@@ -3438,6 +3428,12 @@ do_data_relocation(AOTModule *module, AOTRelocationGroup *group,
     else if (!strncmp(group->section_name, ".rela__llvm_prf_data", 20)) {
         data_section_name = group->section_name + strlen(".rela");
     }
+    else if (!strncmp(group->section_name, ".rel__llvm_prf_vals", 19)) {
+        data_section_name = group->section_name + strlen(".rel");
+    }
+    else if (!strncmp(group->section_name, ".rela__llvm_prf_vals", 20)) {
+        data_section_name = group->section_name + strlen(".rela");
+    }
 #endif
     else {
         set_error_buf(error_buf, error_buf_size,
@@ -3486,7 +3482,37 @@ do_data_relocation(AOTModule *module, AOTRelocationGroup *group,
                 return false;
             }
         }
+        else if (!strcmp(symbol, "__llvm_prf_vals")) {
+            /* Handle exact match for __llvm_prf_vals symbol */
+            uint32 j;
+            for (j = 0; j < module->data_section_count; j++) {
+                if (!strncmp(module->data_sections[j].name, symbol, 15)) {
+                    symbol_addr = module->data_sections[j].data;
+                    break;
+                }
+            }
+            if (j == module->data_section_count) {
+                set_error_buf_v(error_buf, error_buf_size,
+                                "invalid relocation symbol %s", symbol);
+                return false;
+            }
+        }
         else if (!strncmp(symbol, "__llvm_prf_cnts", 15)) {
+            uint32 j;
+            for (j = 0; j < module->data_section_count; j++) {
+                if (!strcmp(module->data_sections[j].name, symbol)) {
+                    symbol_addr = module->data_sections[j].data;
+                    break;
+                }
+            }
+            if (j == module->data_section_count) {
+                set_error_buf_v(error_buf, error_buf_size,
+                                "invalid relocation symbol %s", symbol);
+                return false;
+            }
+        }
+        else if (!strncmp(symbol, "__llvm_prf_vals", 15)) {
+            /* Handle __llvm_prf_vals section for value profiling */
             uint32 j;
             for (j = 0; j < module->data_section_count; j++) {
                 if (!strcmp(module->data_sections[j].name, symbol)) {
