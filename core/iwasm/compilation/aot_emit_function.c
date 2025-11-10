@@ -2769,7 +2769,10 @@ aot_compile_op_call_indirect(AOTCompContext *comp_ctx, AOTFuncContext *func_ctx,
                                 I32_CONST(1),  /* 1 counter for this call site */
                                 I32_CONST(0)); /* counter index 0 */
 
-        /* Now add value profiling to capture the call target */
+        /* Now add value profiling to capture the call target.
+         * LLVM's value profiling expects the actual function pointer address,
+         * not the WebAssembly function index. This allows LLVM to correlate
+         * the runtime target with the actual compiled function for PGO. */
         /* Convert func_ptr to i64 for value profiling */
         LLVMValueRef func_ptr_i64 = LLVMBuildPtrToInt(comp_ctx->builder,
                                                        func_ptr, I64_TYPE,
