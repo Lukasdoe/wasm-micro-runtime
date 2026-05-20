@@ -60,6 +60,9 @@
 #include <llvm/Analysis/AliasAnalysis.h>
 #endif
 #include <llvm/ProfileData/InstrProf.h>
+#include <llvm/ProfileData/InstrProfWriter.h>
+#include <llvm/Support/FileSystem.h>
+#include <llvm/Support/raw_ostream.h>
 
 #include <cstring>
 #include "../aot/aot_runtime.h"
@@ -86,6 +89,37 @@ aot_apply_llvm_new_pass_manager(AOTCompContext *comp_ctx, LLVMModuleRef module);
 LLVM_C_EXTERN_C_END
 
 ExitOnError ExitOnErr;
+
+static bool
+ensure_empty_profdata(const char *path)
+{
+    /* Keep a minimal IR profdata file for enabling IRUse without extern data.
+     */
+    std::error_code ec;
+    if (sys::fs::exists(path) && sys::fs::file_size(path, ec) > 0) {
+        return true;
+    }
+    raw_fd_ostream os(path, ec, sys::fs::OF_None);
+    if (ec) {
+        return false;
+    }
+
+    InstrProfWriter writer;
+    auto warn = [](Error err) { consumeError(std::move(err)); };
+    if (auto err = writer.mergeProfileKind(InstrProfKind::IRInstrumentation)) {
+        consumeError(std::move(err));
+        return false;
+    }
+    writer.addRecord(
+        NamedInstrProfRecord("wamr_empty", 0, std::vector<uint64_t>(1, 0)),
+        warn);
+    if (auto err = writer.write(os)) {
+        consumeError(std::move(err));
+        return false;
+    }
+
+    return true;
+}
 
 class ExpandMemoryOpPass : public PassInfoMixin<ExpandMemoryOpPass>
 {
@@ -193,6 +227,7 @@ aot_check_simd_compatibility(const char *arch_c_str, const char *cpu_c_str)
 void
 aot_apply_llvm_new_pass_manager(AOTCompContext *comp_ctx, LLVMModuleRef module)
 {
+    static const char *empty_prof_file = "/tmp/wamr-empty.profdata";
     TargetMachine *TM =
         reinterpret_cast<TargetMachine *>(comp_ctx->target_machine);
     PipelineTuningOptions PTO;
@@ -218,13 +253,24 @@ aot_apply_llvm_new_pass_manager(AOTCompContext *comp_ctx, LLVMModuleRef module)
         PGO = PGOOptions("", "", "", "", FS, PGOOptions::IRInstr);
 #endif
     }
-    else if (comp_ctx->use_prof_file) {
+    else {
+        /* Always enable the PGO-instr-use pipeline so value profile hints
+           embedded in IR can drive profiling-aware passes (e.g. ICP). */
+        const char *prof_file = comp_ctx->use_prof_file;
+        if (!prof_file) {
+            /* Provide a valid empty profile to satisfy LLVM without
+               loading external data. */
+            if (!ensure_empty_profdata(empty_prof_file)) {
+                aot_set_last_error("failed to create empty LLVM PGO file");
+                return;
+            }
+            prof_file = empty_prof_file;
+        }
 #if LLVM_VERSION_MAJOR < 17
-        PGO = PGOOptions(comp_ctx->use_prof_file, "", "", PGOOptions::IRUse);
+        PGO = PGOOptions(prof_file, "", "", PGOOptions::IRUse);
 #else
         auto FS = vfs::getRealFileSystem();
-        PGO = PGOOptions(comp_ctx->use_prof_file, "", "", "", FS,
-                         PGOOptions::IRUse);
+        PGO = PGOOptions(prof_file, "", "", "", FS, PGOOptions::IRUse);
 #endif
     }
 
