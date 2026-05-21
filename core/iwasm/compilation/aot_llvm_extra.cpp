@@ -279,14 +279,24 @@ aot_apply_llvm_new_pass_manager(AOTCompContext *comp_ctx, LLVMModuleRef module)
 #endif
     }
 
-#ifdef DEBUG_PASS
     PassInstrumentationCallbacks PIC;
-    PassBuilder PB(TM, PTO, PGO, &PIC);
+    PassInstrumentationCallbacks *PIC_ptr = nullptr;
+
+    if (getenv("WAMR_LLVM_PRINT_PIPELINE")) {
+        PIC_ptr = &PIC;
+        PIC.registerBeforeNonSkippedPassCallback([](StringRef pass, Any) {
+            errs() << "WAMR pass: " << pass << "\n";
+        });
+    }
+
+#ifdef DEBUG_PASS
+    PIC_ptr = &PIC;
+    PassBuilder PB(TM, PTO, PGO, PIC_ptr);
 #else
 #if LLVM_VERSION_MAJOR == 12
-    PassBuilder PB(false, TM, PTO, PGO);
+    PassBuilder PB(false, TM, PTO, PGO, PIC_ptr);
 #else
-    PassBuilder PB(TM, PTO, PGO);
+    PassBuilder PB(TM, PTO, PGO, PIC_ptr);
 #endif
 #endif
 
@@ -458,11 +468,6 @@ aot_apply_llvm_new_pass_manager(AOTCompContext *comp_ctx, LLVMModuleRef module)
         Options.UseBFIInPromotion = false;
         Options.Atomic = false;
         MPM.addPass(InstrProfilingLoweringPass(Options, false));
-    }
-
-    if (getenv("WAMR_LLVM_PRINT_PIPELINE")) {
-        errs() << "WAMR LLVM pipeline:\n";
-        MPM.print(errs());
     }
 
     MPM.run(*M, MAM);
