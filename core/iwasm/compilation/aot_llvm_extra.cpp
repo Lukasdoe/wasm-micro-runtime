@@ -96,7 +96,9 @@ ensure_empty_profdata(const char *path)
     /* Keep a minimal IR profdata file for enabling IRUse without extern data.
      */
     std::error_code ec;
-    if (sys::fs::exists(path) && sys::fs::file_size(path, ec) > 0) {
+    uint64_t file_size = 0;
+    if (sys::fs::exists(path) && sys::fs::file_size(path, file_size, ec) == 0
+        && file_size > 0) {
         return true;
     }
     raw_fd_ostream os(path, ec, sys::fs::OF_None);
