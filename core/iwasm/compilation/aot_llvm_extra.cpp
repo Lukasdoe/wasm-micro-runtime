@@ -97,9 +97,11 @@ ensure_empty_profdata(const char *path)
      */
     std::error_code ec;
     uint64_t file_size = 0;
-    if (sys::fs::exists(path) && sys::fs::file_size(path, file_size, ec) == 0
-        && file_size > 0) {
-        return true;
+    if (sys::fs::exists(path)) {
+        ec = sys::fs::file_size(path, file_size);
+        if (!ec && file_size > 0) {
+            return true;
+        }
     }
     raw_fd_ostream os(path, ec, sys::fs::OF_None);
     if (ec) {
