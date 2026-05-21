@@ -64,6 +64,7 @@
 #include <llvm/Support/FileSystem.h>
 #include <llvm/Support/raw_ostream.h>
 
+#include <cstdlib>
 #include <cstring>
 #include "../aot/aot_runtime.h"
 #include "aot_llvm.h"
@@ -457,6 +458,11 @@ aot_apply_llvm_new_pass_manager(AOTCompContext *comp_ctx, LLVMModuleRef module)
         Options.UseBFIInPromotion = false;
         Options.Atomic = false;
         MPM.addPass(InstrProfilingLoweringPass(Options, false));
+    }
+
+    if (getenv("WAMR_LLVM_PRINT_PIPELINE")) {
+        errs() << "WAMR LLVM pipeline:\n";
+        MPM.print(errs());
     }
 
     MPM.run(*M, MAM);
