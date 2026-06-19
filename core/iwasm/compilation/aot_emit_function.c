@@ -2769,13 +2769,16 @@ aot_compile_op_call_indirect(AOTCompContext *comp_ctx, AOTFuncContext *func_ctx,
                                 I32_CONST(1),  /* 1 counter for this call site */
                                 I32_CONST(0)); /* counter index 0 */
 
-        /* Now add value profiling to capture the call target */
-        /* Convert func_idx to i64 for value profiling */
-        LLVMValueRef func_idx_i64 = LLVMBuildZExt(comp_ctx->builder,
-                                                   func_idx, I64_TYPE,
-                                                   "func_idx_i64");
-        if (!func_idx_i64) {
-            aot_set_last_error("llvm build zext failed.");
+        /* Now add value profiling to capture the call target.
+         * LLVM's value profiling expects the actual function pointer address,
+         * not the WebAssembly function index. This allows LLVM to correlate
+         * the runtime target with the actual compiled function for PGO. */
+        /* Convert func_ptr to i64 for value profiling */
+        LLVMValueRef func_ptr_i64 = LLVMBuildPtrToInt(comp_ctx->builder,
+                                                       func_ptr, I64_TYPE,
+                                                       "func_ptr_i64");
+        if (!func_ptr_i64) {
+            aot_set_last_error("llvm build ptrtoint failed.");
             goto fail;
         }
 
@@ -2790,7 +2793,7 @@ aot_compile_op_call_indirect(AOTCompContext *comp_ctx, AOTFuncContext *func_ctx,
                                 "llvm.instrprof.value.profile", VOID_TYPE,
                                 value_prof_param_types, 5, glob,
                                 I64_CONST(func_ctx->aot_func->func_idx),
-                                func_idx_i64,
+                                func_ptr_i64,
                                 I32_CONST(0), /* IPVK_IndirectCallTarget */
                                 I32_CONST(0)); /* call site index */
     }
